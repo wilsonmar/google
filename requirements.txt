@@ -12,6 +12,9 @@ google-api-python-client   # Google API Python Client for Google Workspace APIs,
 google-auth    # to autodetect & use ADC credentials common Google Cloud services Cloud Storage, BigQuery, Pub/Sub
 google-auth-httplib2 
 google-auth-oauthlib
+google-cloud-iam
+google-cloud-service-usage
+google-cloud-resource-manager 
 
 google-api-python-client  # General Google APIs
 googleapis-common-protos  # Common protocol buffers
