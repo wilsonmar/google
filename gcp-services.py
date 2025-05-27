@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MPL-2.0
 __commit_date__ = "2025-05-25"
-__last_commit__ = "v007 from wilsonmar :gcp-services.py"
+__last_commit__ = "v009 rm numpy :gcp-services.py"
 __repository__ = "https://github.com/bomonike/agentic/blob/main/gcp-services.py"
 
 """gcp-services.py
@@ -146,6 +146,7 @@ import pickle
 import pip
 import platform     # https://docs.python.org/3/library/platform.html
 import random
+import requests
 from requests.exceptions import RequestException
 import subprocess
 import sys
@@ -163,7 +164,7 @@ import importlib
 import myutils
 # from myutils import *   # import all objects into the symbol table
 # importlib.reload(myutils)
-print(f"sys.path={sys.path}")
+# print(f"sys.path={sys.path}")
 
 # Clear any cached modules to ensure fresh imports
 for module in ['myutils', 'datetime']:
@@ -190,12 +191,17 @@ try:
     from google.cloud import bigquery       # pip install google-cloud-bigquery
     from google.cloud import compute_v1     # pip install google-cloud-compute
     #from google.cloud import core          # pip install google-cloud-core
+    # google-cloud-firestore 
     from google.cloud import pubsub_v1      # pip install google-cloud-pubsub
     from google.cloud import secretmanager  # pip install google-cloud-secret-manager
     from google.cloud import storage        # pip install google-cloud-core
 
+      # pip install google-api-python-client  # General Google APIs
+      # pip install google-auth  # Authentication
+      # pip install googleapis-common-protos  # Common protocol buffers
+
     import matplotlib.pyplot as plt        # statsd
-    from numpy import numpy as np
+    # from numpy import numpy as np
     from statsd import StatsClient    # pip install python-statsd or statsd
     import tabulate       # pip install tabulate
     from typing import Callable, Optional, Type, Union, List, Dict, Any
@@ -208,7 +214,7 @@ except Exception as e:
     #print("    sys.prefix      = ", sys.prefix)
     #print("    sys.base_prefix = ", sys.base_prefix)
     print(f"Please activate your virtual environment:\n  python3 -m venv venv && source venv/bin/activate")
-    print(f"   pip install --upgrade -r requirements.txt")
+    print(f"  pip install --upgrade -r requirements.txt")
     exit(9)
 
 # FIXME: ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
