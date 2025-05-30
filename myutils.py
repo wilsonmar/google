@@ -4,8 +4,8 @@
 
 #### SECTION 01: Dunder (double-underline) variables accessible from CLI outside Python:
 
-__commit_date__ = "2025-05-29"
-__commit_msg__ = "v003 + is running locally, print_prefix :myutils.py"
+__commit_date__ = "2025-05-30"
+__commit_msg__ = "v005 + print emojis :myutils.py"
 __repository__ = "https://github.com/bomonike/google/blob/main/myutils.py"
 
 """myutils.py
@@ -118,7 +118,8 @@ class bcolors:  # ANSI escape sequences: https://gist.github.com/JBlond/2fea43a3
     VERBOSE = '\033[91m'   # [91 beige
     WARNING = '\033[93m'   # [93 yellow
     ERROR = '\033[95m'     # [95 purple
-    TRACE = '\033[96m'     # [96 blue/green
+    TRACE = '\033[35m'     # CVIOLET
+    TODO = '\033[96m'      # [96 blue/green
     FAIL = '\033[31m'      # [31 red
                            # [94 blue (bad on black background)
     STATS = '\033[36m'     # [36 cyan
@@ -146,6 +147,11 @@ print_prefix = "***"
 
 SHOW_SUMMARY_COUNTS = True
 
+def no_newlines(in_string):
+    """Strip new line from in_string
+    """
+    return ''.join(in_string.splitlines())
+
 def print_separator():
     """A function to put a blank line in CLI output. Used in case the technique changes throughout this code.
     """
@@ -153,87 +159,87 @@ def print_separator():
 
 def print_heading(text_in):
     if show_heading:
+        # Backhand Index Pointing Down Emoji highlights content below was approved as part of Unicode 6.0 in 2010 under the name "White Down Pointing Backhand Index" and added to Emoji 1.0 in 2015.
+        print("👇", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(), end="")
+        print(bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
 
 def print_fail(text_in):  # when program should stop
     if show_fail:
+        # The ⛔ No Entry (Stop sign) Emoji indicates forbidden. approved as part of Unicode 5.2 in 2009 and added to Emoji 1.0 in 2015.
+        print("❌", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.FAIL, f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.FAIL, f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(), end="")
+        print(bcolors.FAIL, f'{text_in}', bcolors.RESET)
 
 def print_error(text_in):  # when a programming error is evident
     if show_fail:
+        print("⭕", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.ERROR, f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.ERROR, f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(), end="")
+        print(bcolors.ERROR, f'{text_in}', bcolors.RESET)
 
 def print_warning(text_in):
     if show_warning:
+        print("⚠️", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.WARNING, f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.WARNING, f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(), end="")
+        print(bcolors.WARNING, f'{text_in}', bcolors.RESET)
 
 def print_todo(text_in):
     if show_todo:
+        # The 🛠️ hammer and wrench emoji is commonly used for various content concerning tools, building, construction, and work, both manual and digital
+        print("💡", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.CVIOLET, "TODO:", f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.CVIOLET, "TODO:", f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(),  end="")
+        print(bcolors.TODO, f'{text_in}', bcolors.RESET)
 
 def print_info(text_in):
     if show_info:
+        # Alternately: print("👍", end="")
+        print("✅", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(), end="")
+        print(bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
 
 def print_verbose(text_in):
     if show_verbose:
+        # The 📣 speaker emoji is used to represent sound, noise, or speech.
+        print("📢", end="")
         if show_dates_in_logs:
-            print(print_prefix, get_log_datetime(), bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
+            print(get_log_datetime(), end="")
+        print(bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
 
 def print_trace(text_in):  # displayed as each object is created in pgm:
     if show_trace:
+        # The 🔍 magnifying glass is a classic for searching, looking, inspecting, approved as part of Unicode 6.0 in 2010 under the name "Left-Pointing Magnifying Glass" and added to Emoji 1.0 in 2015.
+        print("⚙️", end="")
         if show_dates_in_logs:
-            print(print_prefix,get_log_datetime(), bcolors.TRACE, f'{text_in}', bcolors.RESET)
-        else:
-            print(print_prefix, bcolors.TRACE, f'{text_in}', bcolors.RESET)
-
-def no_newlines(in_string):
-    """Strip new line from in_string
-    """
-    return ''.join(in_string.splitlines())
+            print(get_log_datetime(), end="")
+        # The fingerprint emoji was approved as part of Unicode 16.0 in 2024 and added to Emoji 16.0 in 2024.
+        print(bcolors.TRACE, f'{text_in}', bcolors.RESET)
 
 def print_secret(secret_in: str) -> None:
     """ Outputs secrets discreetly - display only the first few characters (like Git) with dots replacing the rest.
     """
     # See https://stackoverflow.com/questions/3503879/assign-output-of-os-system-to-a-variable-and-prevent-it-from-being-displayed-on
-    if show_secrets:  # program parameter
+    if show_secrets:  # program parameter 
+        # The triangular red flag on post emoji signals a problem or issue. Approved as part of Unicode 6.0 in 2010  added to Emoji 1.0 in 2015.
+        print("🚩", end="")
         if show_dates_in_logs:
-            now_utc=datetime.now(timezone('UTC'))
-            print(bcolors.WARNING, CLI_PFX,now_utc,"SECRET: ", secret_in, RESET)
+            print(get_log_datetime(), end="")
+
+        secret_len = 3
+        if len(secret_in) <= 10:  # slice
+            # Regardless of secret length, to reduce hacker ability to guess:
+            print(bcolors.GRAY,"secret too small to print.", bcolors.RESET)
+            #print(bcolors.GRAY,"\"",secret_in,"\"", bcolors.RESET)
         else:
-            print(bcolors.CBEIGE, CLI_PFX, "SECRET: ", secret_in, RESET)
-    else:
-        # same length regardless of secret length to reduce ability to guess:
-        secret_len = 8
-        if len(secret_in) >= 8:  # slice
-            secret_out = secret_in[0:4] + "."*(secret_len-4)
-        else:
+            print(bcolors.WARNING, "WARNING: Secret specified to be shown. POLICY VIOLATION: ", bcolors.RESET)
+            # WARNING NOTE: secrets should not be printed to logs.
             secret_out = secret_in[0:4] + "."*(secret_len-1)
-            if show_dates_in_logs:
-                print(bcolors.WARNING, CLI_PFX, print_datetime(), f'{text_in}', RESET)
-            else:
-                print(bcolors.CBEIGE, CLI_PFX, " SECRET: ", f'{secret_out}', RESET)
-    # NOTE: secrets should not be printed to logs.
+            print(bcolors.GRAY,"\"",secret_out,"...\"", bcolors.RESET)
     return None
 
 
@@ -249,11 +255,11 @@ def show_print_samples() -> None:
     print_info("print_info() -> sample info")
     print_verbose("print_verbose() -> sample verbose")
     print_trace("print_trace() -> sample trace")
-    print_secret("1234567890123456789")
+    print_secret("123456")
     return None
 
 
-def current_function(method="A") -> str:
+def current_function_name(method="A") -> str:
     """Return the name of the current function
     using match-case (Python 3.10+).
     """
@@ -262,6 +268,7 @@ def current_function(method="A") -> str:
             # import sys
             current_function = sys._getframe().f_code.co_name
         case "B":
+            # import inspect
             current_function = inspect.currentframe().f_code.co_name
         case "C":
             current_function = inspect.stack()[0][3]
@@ -283,15 +290,13 @@ def do_clear_cli() -> None:
     return None
 
 
-
-
 #### SECTION 09: File timestamps and lists:
 
 
 def filetimestamp(fileName):
     """
     USAGE: print(f"File last modified: {myutils.filetimestamp("myutils.py")} ")
-    # TODO: Add time zone info.
+    # TODO: Add time zone info. 📢
     """
     created = os.path.getmtime(fileName)
     modified = os.path.getctime(fileName)
@@ -889,7 +894,7 @@ def _get_local_ip():
             s.connect(("8.8.8.8", 80))
             return s.getsockname()[0]
     except Exception as e:
-        print(f"_get_local_ip(): {e}")
+        print(f"{sys._getframe().f_code.co_name}(): {e}")
         return "Unknown"
 
 
@@ -924,6 +929,7 @@ def get_disk_free() -> (float, str):
     Returns float GB of disk space free and text of percentage free.
     References global GB_BYTES.
     """
+    GB_BYTES = 1073741824  # = 1024 * 1024 * 1024 = Terrabyte
     # import shutil
     # Replace '/' with your target path (e.g., 'C:\\' on Windows)
     usage = shutil.disk_usage('/')
@@ -994,6 +1000,8 @@ def trace_memory_usage(func):
 def show_memory_profile():
     """Print detailed memory usage information.
     """
+    GB_BYTES = 1073741824  # = 1024 * 1024 * 1024 = Terrabyte
+
     print_verbose("show_memory_profile():")
 
     system_memory = psutil.virtual_memory()
@@ -1038,7 +1046,7 @@ def stats_to_file(filepath) -> bool:
                 
                 sys.stdout = original_stdout
         except Exception as e:
-            print(f"stats_to_file(\"{filepath}\") append: {e}")
+            print(f"{sys._getframe().f_code.co_name}(\"{filepath}\") append: {e}")
     else:  # not exist:
         try:
             # from contextlib import redirect_stdout
@@ -1048,7 +1056,7 @@ def stats_to_file(filepath) -> bool:
             # print("Back to console")
             return True
         except Exception as e:
-            print(f"stats_to_file(\"{filepath}\") add: {e}")
+            print(f"{sys._getframe().f_code.co_name}(\"{filepath}\") add: {e}")
     return False
 
 
@@ -1082,7 +1090,7 @@ def list_pgm_functions(filename):
         print("    "+name)
 
 
-def extract_dunder_variables(filename: str) -> Dict[str, Any]:
+def _extract_dunder_variables(filename: str) -> Dict[str, Any]:
     """
     USAGE: 
         dunder_items = myutils.extract_dunder_variables("myutils.py")
@@ -1129,7 +1137,7 @@ def extract_dunder_variables(filename: str) -> Dict[str, Any]:
 def print_dunder_vars(filename) -> str:
     print_trace(f"At {sys._getframe().f_code.co_name}() within {filename}:")
     try:
-        dunder_vars = extract_dunder_variables(filename)
+        dunder_vars = _extract_dunder_variables(filename)
         if not dunder_vars:
             print(f"No dunder variables found in {filename}")
         else:
@@ -1177,9 +1185,9 @@ def is_number(s) -> bool:
 def main():
 
     do_clear_cli()
-
+    show_print_samples()
     print_module_filenames()
-    
+    get_environment_info()    
     #mem_usage("start")
     #for a in list_files("./",(".py"), ("__init__")):
     #    print(a)
@@ -1190,10 +1198,16 @@ def main():
     print(f"is_local_development()? {is_local_development()} ")
     #print(f"get_environment_info(): {get_environment_info()} ")
 
+    list_pgm_functions(__file__)
     print_dunder_vars(__file__)  # __file__ = current module name (like "myutils.py")
 
+    get_disk_free()
+    get_process_memory()
+    #trace_memory_usage(func)
+    show_memory_profile()
+    get_all_objects_by_type()
 
-    #mem_usage("end")
+    reverse_words("A string of words")
 
 if __name__ == "__main__":
     main()
