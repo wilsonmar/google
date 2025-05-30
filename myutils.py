@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MPL-2.0
-__commit_date__ = "2025-05-20"
-__commit_msg__ = "v002 + stats_to_file :myutils.py"
-__repository__ = "https://github.com/wilsonmar/python-samples/blob/main/myutils.py"
+
+#### SECTION 01: Dunder (double-underline) variables accessible from CLI outside Python:
+
+__commit_date__ = "2025-05-29"
+__commit_msg__ = "v003 + is running locally, print_prefix :myutils.py"
+__repository__ = "https://github.com/bomonike/google/blob/main/myutils.py"
 
 """myutils.py
 
@@ -44,7 +47,7 @@ ruff check gcp-services.py
 
 # from https://github.com/trkonduri/myutils/blob/master/myutils.py
 
-#### Built-in modules:
+#### SECTION 02: Built-in Python libraries:
 
 import argparse
 import ast
@@ -77,9 +80,11 @@ import urllib.request
 from urllib import request, parse, error
 import uuid
 
-#### Third-party modules:
+
+#### SECTION 03: Third-party Python libraries (requiring pip install):
 
 try:
+    # pylint: disable=wrong-import-position
     from contextlib import redirect_stdout
     from dotenv import load_dotenv   # install python-dotenv
     import pandas as pd
@@ -100,7 +105,8 @@ except Exception as e:
     exit(9)
 
 
-#### SECTION 03: Print Utility Python Functions:
+#### SECTION 03: Print utility globals and functions:
+
 
 ## Global variables: Colors Styles:
 class bcolors:  # ANSI escape sequences: https://gist.github.com/JBlond/2fea43a3049b38287e5e9cefc87b2124
@@ -136,6 +142,9 @@ show_todo = True
 show_info = True
 SHOW_DEBUG = True
 show_dates_in_logs = False
+print_prefix = "***"
+
+SHOW_SUMMARY_COUNTS = True
 
 def print_separator():
     """A function to put a blank line in CLI output. Used in case the technique changes throughout this code.
@@ -145,58 +154,58 @@ def print_separator():
 def print_heading(text_in):
     if show_heading:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
 
 def print_fail(text_in):  # when program should stop
     if show_fail:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.FAIL, f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.FAIL, f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.FAIL, f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.FAIL, f'{text_in}', bcolors.RESET)
 
 def print_error(text_in):  # when a programming error is evident
     if show_fail:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.ERROR, f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.ERROR, f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.ERROR, f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.ERROR, f'{text_in}', bcolors.RESET)
 
 def print_warning(text_in):
     if show_warning:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.WARNING, f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.WARNING, f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.WARNING, f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.WARNING, f'{text_in}', bcolors.RESET)
 
 def print_todo(text_in):
     if show_todo:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.CVIOLET, "TODO:", f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.CVIOLET, "TODO:", f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.CVIOLET, "TODO:", f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.CVIOLET, "TODO:", f'{text_in}', bcolors.RESET)
 
 def print_info(text_in):
     if show_info:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.INFO+bcolors.BOLD, f'{text_in}', bcolors.RESET)
 
 def print_verbose(text_in):
     if show_verbose:
         if show_dates_in_logs:
-            print('***', get_log_datetime(), bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
+            print(print_prefix, get_log_datetime(), bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.VERBOSE, f'{text_in}', bcolors.RESET)
 
 def print_trace(text_in):  # displayed as each object is created in pgm:
     if show_trace:
         if show_dates_in_logs:
-            print('***',get_log_datetime(), bcolors.TRACE, f'{text_in}', bcolors.RESET)
+            print(print_prefix,get_log_datetime(), bcolors.TRACE, f'{text_in}', bcolors.RESET)
         else:
-            print('***', bcolors.TRACE, f'{text_in}', bcolors.RESET)
+            print(print_prefix, bcolors.TRACE, f'{text_in}', bcolors.RESET)
 
 def no_newlines(in_string):
     """Strip new line from in_string
@@ -244,42 +253,126 @@ def show_print_samples() -> None:
     return None
 
 
-# TODO: OpTel (OpenTelemetry) spans and logging:
-
-def export_optel():
-    """ Create and export a trace to your console:
-    https://www.perplexity.ai/search/python-code-to-use-opentelemet-bGjntbF4Sk6I6z3l5HBBSg#0
+def current_function(method="A") -> str:
+    """Return the name of the current function
+    using match-case (Python 3.10+).
     """
-    #from opentelemetry import trace
-    #from opentelemetry.sdk.trace import TracerProvider
-    #from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
+    match method:
+        case "A":
+            # import sys
+            current_function = sys._getframe().f_code.co_name
+        case "B":
+            current_function = inspect.currentframe().f_code.co_name
+        case "C":
+            current_function = inspect.stack()[0][3]
+        case "D":
+            current_function = inspect.currentframe().f_back.f_code.co_name
+        case _:  # default case
+            print_error("Invalid (method)")
+            return None
 
-    # Set up the tracer provider and exporter
-    trace.set_tracer_provider(TracerProvider())
-    span_processor = SimpleSpanProcessor(ConsoleSpanExporter())
-    trace.get_tracer_provider().add_span_processor(span_processor)
-
-    # Get a tracer:
-    tracer = trace.get_tracer(__name__)
-
-    # Create spans:
-    with tracer.start_as_current_span("parent-span"):
-        print_verbose("Doing some work in the parent span")
-        with tracer.start_as_current_span("child-span"):
-            print_verbose("Doing some work in the child span")
+    return current_function
 
 
-
-#### SECTION 08: Python script control utilities:
-
-
-# See https://bomonike.github.io/python-samples/#ParseArguments
-
-def do_clear_cli():
+def do_clear_cli() -> None:
+    """Clear the CLI screen."""
+    print_trace(f"At {sys._getframe().f_code.co_name}()")
     # import os
     # QUESTION: What's the output variable?
     lambda: os.system('cls' if os.name in ('nt', 'dos') else 'clear')
+    return None
 
+
+
+
+#### SECTION 09: File timestamps and lists:
+
+
+def filetimestamp(fileName):
+    """
+    USAGE: print(f"File last modified: {myutils.filetimestamp("myutils.py")} ")
+    # TODO: Add time zone info.
+    """
+    created = os.path.getmtime(fileName)
+    modified = os.path.getctime(fileName)
+    if created == modified:
+        return f"{ctimestamp(fileName)}"
+    else:
+        return f"{mtimestamp(fileName)}"
+
+def mtimestamp(fileName):
+    """
+    USAGE: print(f"File last modified: {myutils.mtimestamp("myutils.py")} ")
+    """
+    t = os.path.getmtime(fileName)
+    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
+
+def ctimestamp(fileName):
+    """
+    USAGE: print(f"File created: {myutils.ctimestamp("myutils.py")}")
+    Fixed datetime import issue
+    """
+    t = os.path.getctime(fileName)
+    # Use the imported datetime class correctly
+    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
+
+def list_files(basePath,validExts=None,contains=None):
+    """
+    USAGE: print(myutils.list_files("./"))
+    List files in a directory with optional filters.
+    Args:
+        basePath: Base directory to search for files
+        validExts: Optional tuple of valid file extensions
+        contains: Optional string to filter file names
+    Yields:
+        File paths that match the filters
+    """
+    for rootDir, dirNames, fileNames in os.walk(basePath):
+        for fileName in fileNames:
+            if contains is not None and fileName.find(contains) == -1:
+                continue
+            # reverse find the "." from back wards
+            ext = fileName[fileName.rfind("."):]
+            if validExts is None or ext.endswith(validExts):
+                file = os.path.realpath(os.path.join(rootDir,fileName))
+                yield file
+
+
+#### SECTION 04: Python program name:
+
+def print_module_filenames() -> None:
+    """
+    USAGE: print_filename()
+    """
+    print_trace(f"At {sys._getframe().f_code.co_name}()")
+
+    #import inspect
+    current_frame = inspect.currentframe()
+    filename = inspect.getfile(current_frame)
+    print(f"inspect.getfile(currentframe()): {os.path.basename(filename)}")
+
+    filename_no_ext = os.path.splitext(os.path.basename(__file__))[0]
+    print(f"__file__ without extension:      {filename_no_ext}     created:  {ctimestamp(__file__)} " )
+
+    #import sys
+    current_module = sys.modules[__name__]
+    print(f"Filename only:      {os.path.basename(__file__):>23}  modified: {mtimestamp(__file__)}")
+
+    if hasattr(current_module, '__file__'):
+        print(f"os.path.basename():              {os.path.basename(current_module.__file__)} ")
+        print(f"current_module.__file__:    {current_module.__file__}")
+
+    print(f"os.path.abspath(__file__):  {os.path.abspath(__file__)} ")
+
+
+    return None
+
+
+
+#### SECTION 05: Python environment variables:
+
+
+# See https://bomonike.github.io/python-samples/#ParseArguments
 
 def set_cli_parms(count):
     """Present menu and parameters to control program
@@ -356,7 +449,7 @@ def print_env_vars():
     pprint.pprint(dict(environ_vars), width = 1)
 
 
-#### SECTION 09: Time Utility Python Functions:
+#### SECTION 05: Time utility functions:
 
 
 def test_datetime():
@@ -374,6 +467,9 @@ def get_user_local_time() -> str:
     now: datetime = datetime.now()
     local_tz = datetime.now(timezone.utc).astimezone().tzinfo
     return f'{now:%I:%M %p (%H:%M:%S) %Y-%m-%d} {local_tz}'
+
+
+#### SECTION 06: Logging utility functions:
 
 
 def get_log_datetime() -> str:
@@ -403,6 +499,83 @@ def get_log_datetime() -> str:
     # if show_dates:  https://medium.com/tech-iiitg/zulu-module-in-python-8840f0447801
 
     return time_str
+
+
+# TODO: OpTel (OpenTelemetry) spans and logging:
+
+def export_optel():
+    """ Create and export a trace to your console:
+    https://www.perplexity.ai/search/python-code-to-use-opentelemet-bGjntbF4Sk6I6z3l5HBBSg#0
+    """
+    #from opentelemetry import trace
+    #from opentelemetry.sdk.trace import TracerProvider
+    #from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
+
+    # Set up the tracer provider and exporter
+    trace.set_tracer_provider(TracerProvider())
+    span_processor = SimpleSpanProcessor(ConsoleSpanExporter())
+    trace.get_tracer_provider().add_span_processor(span_processor)
+
+    # Get a tracer:
+    tracer = trace.get_tracer(__name__)
+
+    # Create spans:
+    with tracer.start_as_current_span("parent-span"):
+        print_verbose("Doing some work in the parent span")
+        with tracer.start_as_current_span("child-span"):
+            print_verbose("Doing some work in the child span")
+
+
+#### SECTION 07: Operating System properties
+
+
+def mem_usage(tag):
+    """
+    USAGE: print(f"Memory used: {myutils.mem_usage("myutils.py")}")
+    """
+    mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    denom = 1024
+    if sys.platform == "darwin":
+        denom = denom**2
+    print(f'INFO: memory used is at {tag} : {round(mem/denom,2)} MB')
+
+def beautify_json(file,outfile=None):
+    """
+    USAGE: myutils.beautify_json("myutils.py"))
+    """
+    js = json.loads(open(file).read())
+    if outfile is None:
+        outfile=file
+    with open(outfile, 'w') as outfilep:
+        json.dump(js,outfilep,sort_keys=True,indent=4)
+
+def get_fuid(fileName):
+    """ Returns user id (such as "johndoe")
+    USAGE: print(f"FUID: {myutils.get_fuid("myutils.py")}")
+    """
+    return(pwd.getpwuid(os.stat(fileName).st_uid).pw_name)
+
+def execsh(command):
+    """
+    USAGE: myutils.execsh("echo")
+    """
+    result = subprocess.run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True, shell=True)
+    return result.stdout
+
+def force_link(src,linkName):
+    """
+    USAGE: myutils.force_link(???)
+    """
+    try:
+        os.symlink(src,linkName)
+    except:
+        if os.path.islink(linkName):
+            os.remove(linkName)
+            os.symlink(src,linkName)
+
+
+
+#### SECTION 08. Environment information metadata:
 
 
 def show_summary() -> bool:
@@ -440,10 +613,6 @@ def show_summary() -> bool:
 
     # TODO: Write wall times to log for longer-term analytics
     return True
-
-
-
-#### SECTION 10. Obtain program environment metadata:
 
 
 # See https://bomonike.github.io/python-samples/#run_env
@@ -638,6 +807,118 @@ def macos_sys_info():
     is_uv_venv_activated()  # both True:
 
 
+def is_running_locally() -> bool:
+    """
+    Returns True if the program is running in a local development environment.
+    Returns False if in production/remote environment (within a server/VM).
+    """    
+    # Method 1: Check for common local development indicators:
+    local_indicators = [
+        # Development environment variables
+        os.getenv('DEVELOPMENT') == 'true',
+        os.getenv('DEBUG') == 'true',
+        os.getenv('ENV') == 'development',
+        os.getenv('ENVIRONMENT') == 'local',
+        
+        # Common local hostnames/IPs:
+        socket.gethostname().lower() in ['localhost', '127.0.0.1'],
+        
+        # Check if running on local IP ranges
+        _is_local_ip(),
+        
+        # Development tools/paths present
+        Path('.git').exists(),  # Git repository
+        Path('requirements.txt').exists() or Path('pyproject.toml').exists(),
+        
+        # Interactive terminal (likely local development)
+        sys.stdin.isatty() and sys.stdout.isatty(),
+    ]
+    
+    return any(local_indicators)
+
+def _is_local_ip():
+    """Check if running on a local IP address."""
+    try:
+        # Get local IP by connecting to external address
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            
+        # Check if IP is in private ranges
+        ip_parts = local_ip.split('.')
+        if len(ip_parts) == 4:
+            first_octet = int(ip_parts[0])
+            second_octet = int(ip_parts[1])
+            
+            # Private IP ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+            return (first_octet == 10 or 
+                   (first_octet == 172 and 16 <= second_octet <= 31) or
+                   (first_octet == 192 and second_octet == 168) or
+                   local_ip == '127.0.0.1')
+    except:
+        return False
+
+def get_environment_info():
+    """Returns a dictionary of detailed information about the current environment.
+    """
+    return {
+        'hostname': socket.gethostname(),
+        'platform': sys.platform,
+        'python_version': sys.version,
+        'working_directory': os.getcwd(),
+        'environment_vars': {
+            'PATH': os.getenv('PATH', ''),
+            'HOME': os.getenv('HOME', ''),
+            'USER': os.getenv('USER', ''),
+            'SHELL': os.getenv('SHELL', ''),
+        },
+        'is_interactive': sys.stdin.isatty(),
+        'has_git': Path('.git').exists(),
+        'local_ip': _get_local_ip(),
+    }
+
+def _get_local_ip():
+    """Returns the local IP address such as 192.168.1.23. 
+    By "connecting" to an external UDP address such as 8.8.8.8 (Google's DNS), 
+    the operating system's routing table determines which 
+    local network interface (and its associated IP address) 
+    is used to reach the internet rather than localhost (127.0.0.1).
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception as e:
+        print(f"_get_local_ip(): {e}")
+        return "Unknown"
+
+
+# Alternative approach using specific environment checks:
+def is_local_development():
+    """
+    Alternative method focusing on common deployment patterns.
+    """
+    # Check for containerized environments (usually not local)
+    if os.path.exists('/.dockerenv') or os.getenv('KUBERNETES_SERVICE_HOST'):
+        return False
+    
+    # Check for cloud platform environment variables
+    cloud_indicators = [
+        'HEROKU_APP_NAME',
+        'AWS_EXECUTION_ENV',
+        'GOOGLE_CLOUD_PROJECT',
+        'AZURE_FUNCTIONS_ENVIRONMENT',
+        'VERCEL',
+        'NETLIFY',
+    ]
+    
+    if any(os.getenv(var) for var in cloud_indicators):
+        return False
+    
+    # If none of the above, likely local
+    return True
+
+
 def get_disk_free() -> (float, str):
     """
     Returns float GB of disk space free and text of percentage free.
@@ -771,42 +1052,15 @@ def stats_to_file(filepath) -> bool:
     return False
 
 
+#### SECTION 08: Python code utilities:
+
+
 def handle_fatal_exit():
     """
     Handle fatal exit with a message first.
     """
     print_trace("handle_fatal_exit() called.")
     sys.exit(9)
-
-
-
-#### Strings of words
-
-def reverse_words(input_str: str) -> str:
-    """
-    USAGE: print(myutils.reverse_words("The dog jumped"))
-    Reverses words in a given string
-    >>> sentence = "I love Python"
-    >>> reverse_words(sentence) == " ".join(sentence.split()[::-1])
-    True
-    >>> reverse_words(sentence)
-    'Python love I'
-    """
-    return " ".join(reversed(input_str.split(" ")))
-
-
-#### Number utilities
-
-
-def is_number(s) -> bool:
-    try:
-        float(s)
-        return True
-    except ValueError:
-        return False
-
-    
-### Python code utilities:
 
 
 def list_pgm_functions(filename):
@@ -826,108 +1080,6 @@ def list_pgm_functions(filename):
     print(f"myutils.list_pgm_functions(\"{sys.argv[0]}\") alphabetically: ")
     for name, func in functions:
         print("    "+name)
-
-
-#### File processing
-
-
-def list_files(basePath,validExts=None,contains=None):
-    """
-    USAGE: print(myutils.list_files("./"))
-    List files in a directory with optional filters.
-    Args:
-        basePath: Base directory to search for files
-        validExts: Optional tuple of valid file extensions
-        contains: Optional string to filter file names
-    Yields:
-        File paths that match the filters
-    """
-    for rootDir, dirNames, fileNames in os.walk(basePath):
-        for fileName in fileNames:
-            if contains is not None and fileName.find(contains) == -1:
-                continue
-            # reverse find the "." from back wards
-            ext = fileName[fileName.rfind("."):]
-            if validExts is None or ext.endswith(validExts):
-                file = os.path.realpath(os.path.join(rootDir,fileName))
-                yield file
-
-
-def filetimestamp(fileName):
-    """
-    USAGE: print(f"File last modified: {myutils.filetimestamp("myutils.py")} ")
-    # TODO: Add time zone info.
-    """
-    created = os.path.getmtime(fileName)
-    modified = os.path.getctime(fileName)
-    if created == modified:
-        return f"{ctimestamp(fileName)}"
-    else:
-        return f"{mtimestamp(fileName)}"
-
-def mtimestamp(fileName):
-    """
-    USAGE: print(f"File last modified: {myutils.mtimestamp("myutils.py")} ")
-    """
-    t = os.path.getmtime(fileName)
-    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
-
-def ctimestamp(fileName):
-    """
-    USAGE: print(f"File created: {myutils.ctimestamp("myutils.py")}")
-    Fixed datetime import issue
-    """
-    t = os.path.getctime(fileName)
-    # Use the imported datetime class correctly
-    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
-
-
-#### Operating System properties
-
-
-def mem_usage(tag):
-    """
-    USAGE: print(f"Memory used: {myutils.mem_usage("myutils.py")}")
-    """
-    mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    denom = 1024
-    if sys.platform == "darwin":
-        denom = denom**2
-    print(f'INFO: memory used is at {tag} : {round(mem/denom,2)} MB')
-
-def beautify_json(file,outfile=None):
-    """
-    USAGE: myutils.beautify_json("myutils.py"))
-    """
-    js = json.loads(open(file).read())
-    if outfile is None:
-        outfile=file
-    with open(outfile, 'w') as outfilep:
-        json.dump(js,outfilep,sort_keys=True,indent=4)
-
-def get_fuid(fileName):
-    """ Returns user id (such as "johndoe")
-    USAGE: print(f"FUID: {myutils.get_fuid("myutils.py")}")
-    """
-    return(pwd.getpwuid(os.stat(fileName).st_uid).pw_name)
-
-def execsh(command):
-    """
-    USAGE: myutils.execsh("echo")
-    """
-    result = subprocess.run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True, shell=True)
-    return result.stdout
-
-def force_link(src,linkName):
-    """
-    USAGE: myutils.force_link(???)
-    """
-    try:
-        os.symlink(src,linkName)
-    except:
-        if os.path.islink(linkName):
-            os.remove(linkName)
-            os.symlink(src,linkName)
 
 
 def extract_dunder_variables(filename: str) -> Dict[str, Any]:
@@ -972,49 +1124,77 @@ def extract_dunder_variables(filename: str) -> Dict[str, Any]:
                         except (ValueError, SyntaxError):
                             # If we can't evaluate it, store it as a string representation
                             dunder_vars[var_name] = f"<non-literal value: {ast.dump(node.value)}>"
-    
     return dunder_vars
 
-
-def main():
-    # Check if a filename was provided
-    if len(sys.argv) != 2:
-        print(f"USAGE: {sys.argv[0]} <python_file>")
-        sys.exit(1)
-        
-    filename = sys.argv[1]
-    
+def print_dunder_vars(filename) -> str:
+    print_trace(f"At {sys._getframe().f_code.co_name}() within {filename}:")
     try:
         dunder_vars = extract_dunder_variables(filename)
-        
         if not dunder_vars:
             print(f"No dunder variables found in {filename}")
         else:
-            print(f"Dunder variables found in {filename}:")
             for name, value in dunder_vars.items():
                 print(f"{name} = {repr(value)}")
     
     except FileNotFoundError:
-        print(f"Error: File '{filename}' not found")
+        print(f"{sys._getframe().f_code.co_name}() Error: File '{filename}' not found!")
         sys.exit(1)
     except SyntaxError as e:
-        print(f"Error: Invalid Python syntax in '{filename}': {e}")
+        print(f"{sys._getframe().f_code.co_name}()Error: Invalid Python syntax in '{filename}': {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"{sys._getframe().f_code.co_name}() Error: {e}! ")
         sys.exit(1)
 
 
-# if __name__ == "__main__":
+#### Strings of words
 
-#mem_usage("start")
-#for a in list_files("./",(".py"), ("__init__")):
-#    print(a)
-#    print(get_fuid(a))
-#my_file="myutils.py"
-#print(f"{my_file} created:  {ctimestamp(my_file)} ")
-#print(f"{my_file} modified: {mtimestamp(my_file)} " )
 
-#mem_usage("end")
+def reverse_words(input_str: str) -> str:
+    """
+    USAGE: print(myutils.reverse_words("The dog jumped"))
+    Reverses words in a given string
+    >>> sentence = "I love Python"
+    >>> reverse_words(sentence) == " ".join(sentence.split()[::-1])
+    True
+    >>> reverse_words(sentence)
+    'Python love I'
+    """
+    return " ".join(reversed(input_str.split(" ")))
 
-# main()
+
+#### Numeric utilities
+
+
+def is_number(s) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+
+def main():
+
+    do_clear_cli()
+
+    print_module_filenames()
+    
+    #mem_usage("start")
+    #for a in list_files("./",(".py"), ("__init__")):
+    #    print(a)
+    #    print(get_fuid(a))
+    #my_file="myutils.py"
+
+    print(f"is_running_locally()? {is_running_locally()} ")
+    print(f"is_local_development()? {is_local_development()} ")
+    #print(f"get_environment_info(): {get_environment_info()} ")
+
+    print_dunder_vars(__file__)  # __file__ = current module name (like "myutils.py")
+
+
+    #mem_usage("end")
+
+if __name__ == "__main__":
+    main()
+
