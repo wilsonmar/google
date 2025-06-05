@@ -4,8 +4,8 @@
 
 #### SECTION 01: Dunder (double-underline) variables accessible from CLI outside Python:
 
-__commit_date__ = "2025-05-30"
-__commit_msg__ = "v005 + print emojis :myutils.py"
+__commit_date__ = "2025-06-04"
+__commit_msg__ = "v006 + gen rsa keypair :myutils.py"
 __repository__ = "https://github.com/bomonike/google/blob/main/myutils.py"
 
 """myutils.py
@@ -69,9 +69,11 @@ import platform # https://docs.python.org/3/library/platform.html
 import pwd                # https://www.geeksforgeeks.org/pwd-module-in-python/
 import random
 import resource
+import secrets
 import site
 import shutil     # for disk space calcs
 import socket
+import string
 import subprocess
 import sys
 import time
@@ -85,12 +87,16 @@ import uuid
 
 try:
     # pylint: disable=wrong-import-position
+    from cryptography.fernet import Fernet    # pip install cryptography
+    from cryptography.hazmat.primitives import serialization     # uv pip install cryptography
+    from cryptography.hazmat.primitives.asymmetric import rsa    # uv pip install cryptography
     from contextlib import redirect_stdout
     from dotenv import load_dotenv   # install python-dotenv
     import pandas as pd
     from pathlib import Path
     import psutil      #  psutil-5.9.5
     from pythonping import ping
+    import pyAesCrypt            # pip install pyAesCrypt
     import pytz   # time zones
     import requests
     import statsd
@@ -99,9 +105,7 @@ try:
 except Exception as e:
     print(f"Python module import failed: {e}")
     # pyproject.toml file exists
-    print(f"Please activate your virtual environment:\n  python3 -m venv venv && source venv/bin/activate")
-    #print("    sys.prefix      = ", sys.prefix)
-    #print("    sys.base_prefix = ", sys.base_prefix)
+    print(f"Please activate your virtual environment:\n  python3 -m venv venv && source .venv/bin/activate")
     exit(9)
 
 
@@ -451,7 +455,7 @@ def print_env_vars():
     # import pprint
     environ_vars = os.environ
     print_heading("User's Environment variable:")
-    pprint.pprint(dict(environ_vars), width = 1)
+    print.pprint(dict(environ_vars), width = 1)
 
 
 #### SECTION 05: Time utility functions:
@@ -467,11 +471,29 @@ def test_datetime():
 def get_user_local_time() -> str:
     """ 
     Returns a string formatted with datetime stamp in local timezone.
+    Not used in logs which should be in UTC.
     Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
     """
     now: datetime = datetime.now()
     local_tz = datetime.now(timezone.utc).astimezone().tzinfo
     return f'{now:%I:%M %p (%H:%M:%S) %Y-%m-%d} {local_tz}'
+
+def get_user_local_timestamp(format_str: str ="yymmddhhmm") -> str:
+    """ 
+    Returns a string formatted with datetime stamp in local timezone.
+    Not used in logs which should be in UTC.
+    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
+    """
+    current_time = time.localtime()  # localtime([secs])
+    year = str(current_time.tm_year)[-2:]  # Last 2 digits of year
+    month = str(current_time.tm_mon).zfill(2)  # .zfill(2) = zero fill
+    day = str(current_time.tm_mday).zfill(2)  # Day with leading zero
+    hour = str(current_time.tm_hour).zfill(2)  # Day with leading zero
+    minute = str(current_time.tm_min).zfill(2)  # Day with leading zero
+    if format_str == "yymmdd":
+        return f'{year}{month}{day}'
+    if format_str == "yymmddhhmm":
+        return f'{year}{month}{day}{hour}{minute}'
 
 
 #### SECTION 06: Logging utility functions:
@@ -507,6 +529,7 @@ def get_log_datetime() -> str:
 
 
 # TODO: OpTel (OpenTelemetry) spans and logging:
+
 
 def export_optel():
     """ Create and export a trace to your console:
@@ -1092,6 +1115,8 @@ def list_pgm_functions(filename):
 
 def _extract_dunder_variables(filename: str) -> Dict[str, Any]:
     """
+    Extract dunder variables from a Python source file.
+    Used by print_dunder_vars(filename) below.
     USAGE: 
         dunder_items = myutils.extract_dunder_variables("myutils.py")
         for i, (key, value) in enumerate(dunder_items.items(), 1):
@@ -1099,7 +1124,6 @@ def _extract_dunder_variables(filename: str) -> Dict[str, Any]:
         for key, value in dunder.items():
             print(f"{key}: {value}")
 
-    Extract dunder variables from a Python source file.
     Args:
         filename: Path to the Python source file
     Returns:
@@ -1155,6 +1179,222 @@ def print_dunder_vars(filename) -> str:
         sys.exit(1)
 
 
+#### Encryption on Drives
+
+
+def list_disk_space_by_device() -> None:
+    """ List each physical drive (storage device hardware), such as an internal hard disk drive (HDD) or solid-state drive (SSD)
+    """
+    print_heading("Logical Disk Device Partitions (sdiskpart):\n"+
+        "/mountpoint Drive           /device        fstype  opts (options)\n"+
+        "   Total size:    Used:       Free: ")
+    partitions = psutil.disk_partitions()
+    for partition in partitions:
+        print(partition.mountpoint.ljust(28) +
+            partition.device.ljust(16) +
+            partition.fstype.ljust(8) +
+            partition.opts)
+        if partition.mountpoint.startswith('/Volumes/'):
+            # Check if the volume is removable
+            cmd = f"diskutil info {partition.device}"
+            output = subprocess.check_output(cmd, shell=True).decode('utf-8')
+            if "Removable Media: Yes" in output:
+                removable_volumes.append(partition.mountpoint)
+        try:
+            usage = psutil.disk_usage(partition.mountpoint)
+            print("   "+f"{usage.total / (1024 * 1024 * 1024):.2f} GB".rjust(10) +
+                f"{usage.used / (1024 * 1024 * 1024):.2f} GB".rjust(12) +
+                f"{usage.free / (1024 * 1024 * 1024):.2f} GB".rjust(12) )
+        except PermissionError:
+            print_error("list_disk_space_by_device() Permission denied to access usage information")
+
+        print()
+        return None
+
+
+def list_macos_volumes() -> None:
+    """ Like Bash CLI: diskutil list
+    STATUS: NOT WORKING
+    volumes_path = '/Volumes'
+    volumes = os.listdir(volumes_path)
+    """
+    print("*** Drive Volumes:")
+    removable_volumes = []
+    import psutil
+    partitions = psutil.disk_partitions(all=True)
+
+    for partition in partitions:
+        if partition.mountpoint.startswith('/Volumes/'):
+            # Check if the volume is removable
+            cmd = f"diskutil info {partition.device}"
+            output = subprocess.check_output(cmd, shell=True).decode('utf-8')
+            if "Removable Media: Yes" in output:
+                removable_volumes.append(partition.mountpoint)
+
+    for volume in removable_volumes:
+        print(f"Removable volume: {volume}")
+
+        volume_path = os.path.join(volumes_path, volume)
+        if os.path.ismount(volume_path):
+            print(f"- {volume}")
+    return None
+
+
+def list_files_by_mountpoint() -> None:
+    """ List files within get all disk partitions
+    """
+    #import os
+    #import psutil
+    partitions = psutil.disk_partitions()
+    print("Listing first 5 files by mountpoint:")
+    for partition in partitions:
+        mountpoint = partition.mountpoint
+        print(f"\n{mountpoint}")
+        print("        Files:")
+        try:
+            # List files in the mountpoint
+            files = os.listdir(mountpoint)
+            for file in files[:5]:  # Limit to first 5 files for brevity
+                print(f"        - {file}")
+            if len(files) > 5:
+                print("        ...")
+        except PermissionError:
+            print("Permission denied to access this mountpoint")
+        except Exception as e:
+            print(f"Error: {str(e)}")
+    return None
+
+
+def read_file_from_removable_drive(drive_path: str, file_name: str, content: str) -> str:
+    """TODO: Read content (text) from a file_name on a removable drive on macOS. 
+    Example: -d "/Volumes/DriveName"
+    """
+    write_file_to_removable_drive(drive_path, env_file, content)
+
+    # Find the user's $HOME path:
+    global user_home_dir_path
+    user_home_dir_path = str(Path.home())
+       # example: /users/john_doe
+    global_env_path = user_home_dir_path + "/" + env_file  # concatenate path
+
+    # PROTIP: Check if .env file on global_env_path is readable:
+    if not os.path.isfile(global_env_path):
+        print_error("global_env_path "+global_env_path+" not found!")
+    else:
+        print_info("global_env_path "+global_env_path+" is readable.")
+
+    path = pathlib.Path(global_env_path)
+    # Based on: pip3 install python-dotenv
+    # from dotenv import load_dotenv
+       # See https://www.python-engineer.com/posts/dotenv-python/
+       # See https://pypi.org/project/python-dotenv/
+    load_dotenv(global_env_path)  # using load_dotenv
+
+    # Wait until variables for print_trace are retrieved:
+    #print_trace("env_file="+env_file)
+    #print_trace("user_home_dir_path="+user_home_dir_path)
+
+    # After pip install envcload
+    # from envcloak import load_encrypted_env
+    load_encrypted_env('.env.enc', key_file='mykey.key').to_os_env()
+        # Now os.environ contains the decrypted variables
+
+    return global_env_path
+
+
+def write_file_to_removable_drive(drive_path: str, file_name: str, content: str) -> None:
+    """
+    Write content (text) to a file_name on a removable drive on macOS.
+    :param drive_path: The path to the removable drive
+    See https://www.kingston.com/en/blog/personal-storage/using-usb-drive-on-mac
+    """
+    # Verify that the drive is mounted and the path exists:
+    if not os.path.exists(drive_path):
+        # mount point = drive_path = '/Volumes/YourDriveName'
+        print_error(f"Drive path {drive_path} not found. Please check if it's properly connected.")
+        raise FileNotFoundError(f"The drive path {drive_path} does not exist.")
+        # Perhaps permission error?
+        list_macos_volumes()
+        exit(9)
+
+    try:
+        # Write the content to the file
+        with open(drive_path, 'w') as file:
+            file.write(content)
+        print(f"File '{file_name}' has been successfully written to {drive_path}")
+    except PermissionError:
+        print(f"Permission denied. Unable to write to {drive_path}")
+    except IOError as e:
+        print(f"An error occurred while writing the file: {e}")
+
+
+def eject_drive(drive_path: str) -> None:
+    """Safely eject removeable drive after use, where
+    drive_path = '/Volumes/DRIVE_VOLUME'
+    """
+    try:
+        # import subprocess
+        subprocess.run(["diskutil", "eject", drive_path], check=True)
+        print(f"Successfully ejected {drive_path}")
+    except subprocess.CalledProcessError:
+        print(f"Failed to eject {drive_path}")
+    return None
+
+
+
+def get_api_key(app_id: str, account_name: str) -> str:
+    """Get API key from macOS Keyring file or .env file (depending on what's available)
+    referencing global variables keyring_service_name & keyring_account_name
+    USAGE: api_key = get_api_key("anthropic","johndoe")
+    """
+    print_verbose("get_api_key() app_id="+app_id+", account_name="+account_name)
+
+    if is_macos():
+        # Pull sd_api_key as password from macOS Keyring file (and other password manager):
+        try:
+            #import keyring
+            api_key = keyring.get_password(app_id,account_name)
+            if api_key:
+                print_trace("get_api_key() len(api_key)="+str(len(api_key))+" chars.")
+                return api_key
+            else:
+                # FIXME: sd_api_key=None
+                print_error("get_api_key() api_key=None")
+                return None
+        except Exception as e:
+            print_error("get_api_key() str({e})")
+            return None
+    else:
+        print_error("get_api_key() not macOS. Obtain key from .env file?")
+    
+    return None
+
+
+def shorten_url(long_url: str) -> str:
+    base_url = 'http://tinyurl.com/api-create.php?url='
+    response = requests.get(base_url + long_url)
+    print_trace(f"shorten_url() {response.text}")
+    return response.text
+
+
+def save_url_to_file(filepath: str, url: str) -> None:
+    """ Create a shareable file that, when clicked, opens a window in the default browser,
+    showing the web page at the URL specified in the file.
+    filepath = "/Users/johndoe/Desktop/whatever/example.url"
+    url such as "https://www.example.com"
+    USAGE: save_url_to_file(url, filename) 
+    """
+    print_verbose("save_url_to_file() filepath="+filepath+", url="+url)
+    content = "[InternetShortcut]\nURL="+url
+    try:
+        with open(filepath, "w") as file:
+            file.write(content)
+        return True
+    except Exception as e:
+        print_error("save_url_to_file() "+filepath+" exception: "+str(e))
+        return False
+
+
 #### Strings of words
 
 
@@ -1180,6 +1420,393 @@ def is_number(s) -> bool:
         return True
     except ValueError:
         return False
+
+
+#### Encryption/Decrpytion of secrets
+
+
+def gen_random_alphanumeric(length=12):
+    """
+    Generate a cryptographically secure random alphanumeric string.
+    
+    Args:
+        length (int): Length of the string to generate (default: 12)
+    
+    Returns:
+        str: Secure random alphanumeric string
+    """
+    #import string
+    characters = string.ascii_lowercase + string.digits
+    #import secrets
+    return ''.join(secrets.choice(characters) for _ in range(length))
+    # WARNING: Avoid printing out secret values.
+
+
+def generate_rsa_keypair(key_size=2048, save_to_files=True, output_dir="~/.keys"):
+    """
+    Generate RSA private/public key pair
+    
+    Args:
+        key_size (int): Size of the RSA key (default: 2048)
+        save_to_files (bool): Whether to save keys to files
+        output_dir (str): Directory to save key files
+    
+    Returns:
+        tuple: (private_key_pem, public_key_pem) as bytes
+    """
+    
+    # Generate private key
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
+    )
+    
+    # Get public key from private key
+    public_key = private_key.public_key()
+    
+    # Serialize private key to PEM format
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    
+    # Serialize public key to PEM format
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    
+    if save_to_files:
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save private key
+        private_key_path = os.path.join(output_dir, "private_key.pem")
+        with open(private_key_path, "wb") as f:
+            f.write(private_pem)
+        
+        # Save public key
+        public_key_path = os.path.join(output_dir, "public_key.pem")
+        with open(public_key_path, "wb") as f:
+            f.write(public_pem)
+        
+        # Set appropriate file permissions (readable only by owner)
+        os.chmod(private_key_path, 0o600)
+        os.chmod(public_key_path, 0o644)
+        
+        print(f"Private key saved to: {private_key_path}")
+        print(f"Public key saved to: {public_key_path}")
+    
+    return private_pem, public_pem
+
+def generate_encrypted_keypair(password, key_size=2048, output_dir="~/.keys"):
+    """
+    Generate RSA key pair with encrypted private key
+    
+    Args:
+        password (str): Password to encrypt the private key
+        key_size (int): Size of the RSA key
+        output_dir (str): Directory to save key files
+    """
+    
+    # Generate private key
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
+    )
+    
+    public_key = private_key.public_key()
+    
+    # Serialize private key with password encryption
+    encrypted_private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+    )
+    
+    # Serialize public key
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Save encrypted private key
+    private_key_path = os.path.join(output_dir, "private_key_encrypted.pem")
+    with open(private_key_path, "wb") as f:
+        f.write(encrypted_private_pem)
+    
+    # Save public key
+    public_key_path = os.path.join(output_dir, "public_key.pem")
+    with open(public_key_path, "wb") as f:
+        f.write(public_pem)
+    
+    # Set file permissions
+    os.chmod(private_key_path, 0o600)
+    os.chmod(public_key_path, 0o644)
+    
+    print(f"Encrypted private key saved to: {private_key_path}")
+    print(f"Public key saved to: {public_key_path}")
+    
+    return encrypted_private_pem, public_pem
+
+
+def read_file_to_string(file_path):
+    """Returns the text contents of a file, as a string.
+    """
+    if not file_path:
+        print_error(f"{sys._getframe().f_code.co_name}(): file_path is needed but not provided.")
+        return None
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            text_content = file.read()
+        print_verbose(f"{sys._getframe().f_code.co_name}(): \"{len(text_content)}\" chars in \"{file_path}\" ")
+        return text_content
+    except FileNotFoundError:
+        print_error(f"{sys._getframe().f_code.co_name}(): File \"{file_path}\" not found")
+        return None
+    except Exception as e:
+        print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return None
+
+
+def delete_all_files_in_folder(folder_path):
+    """Delete all files in folder using pathlib (Python 3.4+)"""
+    try:
+        folder = Path(folder_path)
+        for file_path in folder.iterdir():
+            if file_path.is_file():
+                file_path.unlink()
+                print_trace(f"{sys._getframe().f_code.co_name}(): Deleted: {file_path.name}")
+        print_verbose(f"{sys._getframe().f_code.co_name}(): All files deleted from {folder_path}")
+    except FileNotFoundError:
+        print(f"{sys._getframe().f_code.co_name}(): Folder not found: {folder_path}")
+    except PermissionError:
+        print(f"{sys._getframe().f_code.co_name}(): Permission denied: {folder_path}")
+    except Exception as e:
+        print(f"{sys._getframe().f_code.co_name}(): {e}")
+
+
+def hash_file_sha256(filename: str) -> str:
+    # A hash is a fixed length one way string from input data. Change of even one bit would change the hash.
+    # A hash cannot be converted back to the input data (unlike encryption).
+    # https://stackoverflow.com/questions/22058048/hashing-a-file-in-python
+
+    func_start_timer = time.perf_counter()
+
+    #import hashlib
+    sha256_hash = hashlib.sha256()
+    # There are also md5(), sha224(), sha384(), sha512()
+    BUF_SIZE = 65536
+    with open(filename, "rb") as f: # read entire file as bytes
+        # Read and update hash string value in blocks of 64K:
+        for byte_block in iter(lambda: f.read(BUF_SIZE),b""):
+            sha256_hash.update(byte_block)
+    hash_text = sha256_hash.hexdigest()
+
+    func_duration = time.perf_counter() - func_start_timer
+    print_trace(f"hash_file_sha256() {hash_text} in {func_duration:.5f} seconds")
+    return hash_text
+
+
+def encrypt_symmetrically(source_file_path: str, cyphertext_file_path: str) -> str:
+    """Encrypt a plaintext file to cyphertext using Fernet symmetric encryption algorithm
+    after reading entire file into memory.
+    Based on https://www.educative.io/answers/how-to-create-file-encryption-decryption-program-using-python
+    """
+    func_start_timer = time.perf_counter()
+    
+    # Generate a 32-byte random encryption key like J64ZHFpCWFlS9zT7y5zxuQN1Gb09y7cucne_EhuWyDM=
+    if not ENCRYPTION_KEY:   # global variable
+        # pip install cryptography  # cryptography-44.0.0
+        #from cryptography.fernet import Fernet
+        ENCRYPTION_KEY = Fernet.generate_key()
+    # Create a Fernet object instance from the encryption key:
+    fernet_obj = Fernet(ENCRYPTION_KEY)
+
+    # Read file contents:
+    with open(source_file_path, 'rb') as file:
+        file_contents = file.read()
+    # WARNING: Measure file size because file.read() reads the wholefile into memory.
+    file_bytes = len(file_contents)
+
+    # Encrypt file contents:
+    encrypted_contents = fernet_obj.encrypt(file_contents)
+    with open(cyphertext_file_path, 'wb') as encrypted_file:
+        encrypted_file.write(encrypted_contents)
+    # Measure encrypted file size:
+    encrypted_file_bytes = len(encrypted_file)
+    
+    # import io
+    key_out = io.BytesIO()
+    # WARNING: For better security, we do not output the key out to a file.
+    # with open('filekey.key', 'wb') as key_file:
+    #    key_out.write(key)
+
+    func_duration = time.perf_counter() - func_start_timer
+    print_info(f"encrypt_symmetrically() From {file_bytes} bytes to {encrypted_file_bytes} bytes in {func_duration:.5f} seconds")
+    return key_out
+
+
+def encrypt_secret(cleartext_in=None):
+    """Encrypt a secret using the Fernet module.
+    """
+    # from cryptography.fernet import Fernet   # pip install cryptography
+    if not cleartext_in:
+        cleartext_in = b"A really secret message. Not for prying eyes."
+    key = Fernet.generate_key()
+    f = Fernet(key)
+    binary_token = f.encrypt(cleartext_in)
+    # CAUTION: token is a command which outputs the token b'...(don't do it)
+    # decrypted_text = f.decrypt(token)
+      # b'A really secret message. Not for prying eyes.'
+    myutils.print_verbose(f"Encrypted binary token contains {len(str(binary_token))} characters.")
+    # CAUTION: It is a security violation to display secure tokens in the console.
+    return binary_token
+
+
+def encrypt_file(file_path: str) -> bool:
+    """Encrypt a file using AES-256 encryption.
+    USAGE: 
+        password = "your-strong-password"
+        pyAesCrypt.encryptFile("data.txt", "data.txt.aes", password)
+        pyAesCrypt.decryptFile("data.txt.aes", "dataout.txt", password)
+    """
+    # import os, import shutil import datetime
+    # import pyAesCrypt
+    print_verbose("encrypt_file() "+file_path)
+    try:
+        # import pyAesCrypt
+        pyAesCrypt.encryptFile(file_path, file_path + ".aes")
+    except Exception as e:
+        print_error("encrypt_file() exception: "+str(e))
+        return False
+
+    print_trace("encrypt_file() done with "+file_path)
+    return True
+
+
+def decrypt_file(file_path: str) -> bool:
+    """Decrypt a file using AES-256 encryption."""
+    # import os, import shutil import datetime
+    # import pyAesCrypt
+    print_verbose("decrypt_file() "+file_path)
+    try:
+        # import pyAesCrypt
+        pyAesCrypt.decryptFile(file_path, file_path[:-4])
+    except Exception as e:
+        print_error("decrypt_file() exception: "+str(e))
+        return False
+
+    print_trace("decrypt_file() done with "+file_path)
+    return True
+
+
+def save_key_in_keychain(svc: str, acct: str, key: str) -> bool:
+    """ Save the encryption key (password) in the keychain.
+    USAGE: 
+    1. my_secret_key = create_encryption_key() 
+    2. encrypt(my_secret_key)
+    3. save_key_in_keychain("pgm", "mondrian", "my-secret-key")
+    """
+    print_verbose("save_key_in_keychain() "+svc+", "+acct+", len="+str(len(key)))
+    # import keyring
+    keyring.set_password(svc, acct, key)
+
+    # Retrieve a password:
+    retrieved_key = keyring.get_password(svc, acct)
+    if retrieved_key != key:
+        print_error("save_key_in_keychain() key not found in Keychain.")
+        return False
+    else:
+        print_trace(f"save_key_in_keychain() done.")
+        return True
+
+
+### SECTION 17 - Send Gmail
+
+
+def send_smtp() -> bool:
+    """Send email using SMTP protocol through port 465 (SSL) on Gmail servers.
+    Global EMAIL_TO is a list of recipients [recipient@example.com,etc.]
+    The sender is fixed in the .env file: EMAIL_FROM = "loadtesters@gmail.com"
+    sender_password is in the 
+    subject is assembled in this function: subject = "Test Email"
+    :body_in is assembled in this function
+    :PROGRAM_NAME from global variable
+    :RUNID from global variable
+    "This is a test email sent from Python using Gmail SMTP."
+    See https://realpython.com/python-send-email/ & https://www.youtube.com/watch?v=WZ_pUSAV5DA
+    """
+    password = get_api_key("gmail",EMAIL_FROM)  # loadtesters
+    if not password:
+        print_error("send_smtp() does not have password needed.")
+        return False
+
+    recipients = EMAIL_TO  # Recipients as a list: "[ 1@example.com, 2@example.com ]"
+    if recipients is None:   # Not a list
+        print_error("--emailfrom does not have recipients for send_smtp().")
+        return False
+    
+    #import smtplib
+    #from email.mime.text import MIMEText
+    body = f"From send_smtp() using Gmail SMTP."
+        # TODO: Add log lines captured into log database during run.
+    msg = MIMEText(body)
+    msg['From'] = EMAIL_FROM
+    msg['Subject'] = f"From {PROGRAM_NAME} for {RUNID}"
+
+    for index, recipient in enumerate(recipients.split(",")):
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
+            smtp_server.login(EMAIL_FROM, password)
+            msg['To'] = recipient
+            smtp_server.sendmail(EMAIL_FROM, recipient, msg.as_string())
+            print_verbose(f"send_smtp() emailed {index + 1} to "+recipient)
+    # FIXME: smtplib.SMTPAuthenticationError: (535, b'5.7.8 Username and Password not accepted. 
+    # For more information, go to\n5.7.8  https://support.google.com/mail/?p=BadCredentials 
+    # 98e67ed59e1d1-2f7ffa76d1csm4313179a91.32 - gsmtp')
+    return True
+
+# To parse inbound email:
+# https://postmarkapp.com/blog/an-introduction-to-inbound-email-parsing-what-it-is-and-how-you-can-do-it
+# https://dev.to/devteam/join-the-postmark-challenge-inbox-innovators-3000-in-prizes-497l?
+
+
+def gen_qrcode(url: str,qrcode_file_path: str) -> bool:
+    """Generate a QR code from a URL and save it to a file.
+    See https://www.geeksforgeeks.org/python-generate-qr-code/
+    See https://python.plainenglish.io/how-i-generate-qr-codes-with-python-in-under-30-seconds-77f627e8fe63
+    """
+    if not GEN_QR_CODE:  # Bypass
+        return False
+
+    print_verbose("gen_qrcode() url="+url+" qrcode_file_path="+qrcode_file_path)
+    try:
+        #import qrcode  with higher level of error correction
+        qr = qrcode.QRCode(version=2, 
+            error_correction=qrcode.constants.ERROR_CORRECT_H, 
+            box_size=10, border=5)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(qrcode_file_path)
+        print_verbose("gen_qrcode() output to "+qrcode_file_path)
+        return True
+    except Exception as e:
+        print_error("gen_qrcode() error: "+str(e)+" for "+url)
+        return False
+
+
+# Test if a variable is None:
+def is_none(variable):
+    return variable is None
+
+def is_only_numbers(variable):
+    return str(variable).isdigit()
+
 
 
 def main():
@@ -1208,6 +1835,33 @@ def main():
     get_all_objects_by_type()
 
     reverse_words("A string of words")
+
+    # Secrets:
+    print_heading("RSA Key Pair Generator:")
+
+    print(f"gen_random_alphanumeric(): \"{gen_random_alphanumeric(length=12)}\" ")
+    # On Macos: Save keys in standard PEM format.
+
+    #file_path = "./keys/private_key.pem"
+    #print_heading(f"1. Generating unencrypted RSA key pair (2048-bit) to \"{file_path}\"...")
+    #private_pem, public_pem = generate_rsa_keypair()
+    #print(f"Private key size: {len(private_pem)} bytes")
+    #print(f"Public key size:  {len(public_pem)} bytes")
+    #delete_all_files_in_folder(folder_path)
+    
+    #folder_path = "./encrypted_keys"
+    #print_heading(f"2. Generating encrypted RSA key pair to \"{folder_path}\"...")
+    #password = "your_secure_password_here"  # Change this!
+    #generate_encrypted_keypair(password, output_dir="./encrypted_keys")
+    #delete_all_files_in_folder(folder_path)
+    
+    folder_path = "./large_keys"
+    print_heading(f"3. Generating 4096-bit RSA key pair to \"{folder_path}\"...")
+    generate_rsa_keypair(key_size=4096, output_dir="./large_keys")
+    file_path="./large_keys/private_key.pem"
+    private_rsa_key_clear_text = read_file_to_string(file_path)
+    # DO NOT PRINT SECRETS: private_rsa_key_clear_text
+    delete_all_files_in_folder(folder_path)
 
 if __name__ == "__main__":
     main()
