@@ -1,3 +1,4 @@
+# "v004 + qrcode, pip :requirements.txt" for https://github.com/bomonike/google
 # requirements.txt file processed by: 
 # pip install --upgrade -r requirements.txt
 # pip-audit -r requirements.txt
@@ -40,6 +41,7 @@ matplotlib
 openai
 pandas
 pathlib
+pip
 plotly     # matplotlib interactively
 psutil     # psutil-7.0.0
 pydantic
@@ -48,6 +50,7 @@ pyAesCrypt
 python-dotenv
 pythonping
 pytz
+qrcode
 statsd    # monitoring
 tenacity
 typing
