@@ -60,7 +60,7 @@ Note that program gpc-services.py by default looks for a file named <strong>pyth
 4. Grant IAM permissions to the external identity
 
 5. Use the generated configuration in your workload
-      
+  
 Your account or service account needs these permissions:
 
 iam.workloadIdentityPools.create

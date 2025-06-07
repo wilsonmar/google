@@ -4,9 +4,10 @@
 
 #### SECTION 01: Dunder (double-underline) variables accessible from CLI outside Python:
 
-__commit_date__ = "2025-06-04"
-__commit_msg__ = "v006 + gen rsa keypair :myutils.py"
+__commit_date__ = "2025-06-05"
+__commit_msg__ = "v008 + delete folder :myutils.py"
 __repository__ = "https://github.com/bomonike/google/blob/main/myutils.py"
+__status__ = "WORKING: ruff check myutils.py => All checks passed!"
 
 """myutils.py
 
@@ -47,44 +48,81 @@ ruff check gcp-services.py
 
 # from https://github.com/trkonduri/myutils/blob/master/myutils.py
 
-#### SECTION 02: Built-in Python libraries:
+
+#### SECTION 02: Capture pgm start date/time from the earliest point:
+
+# ruff: noqa: E402 Module level import not at top of file
+# See https://bomonike.github.io/python-samples/#StartingTime
+# Built-in libraries (no pip/conda install needed):
+from datetime import datetime, timezone
+import time  # for timestamp
+#from time import perf_counter_ns
+std_strt_timestamp = time.monotonic()
+#from zoneinfo import ZoneInfo  # For Python 3.9+ https://docs.python.org/3/library/zoneinfo.html 
+
+# To display wall clock date & time of program start:
+# pgm_strt_datetimestamp = datetime.now() has been deprecated.
+pgm_strt_timestamp = time.monotonic()
+
+# TODO: Display Z (UTC/GMT) instead of local time
+pgm_strt_epoch_timestamp = time.time()
+pgm_strt_local_timestamp = time.localtime()
+# NOTE: Can't display the dates until formatting code is run below
+
+
+#### SECTION 03: Built-in Python libraries:
+
+
+import time
+std_strt_timestamp = time.monotonic()
 
 import argparse
 import ast
-import base64
+# UNUSED: import base64
+import click
 # import boto3  # for aws python
-from collections import OrderedDict, defaultdict
-from datetime import datetime, timezone  # ensure this is the only datetime import
+# UNUSED: from collections import OrderedDict
+from collections import defaultdict
 import gc
-import http.client
+import hashlib
+# UNUSED: import http.client
 import importlib.util
 import inspect
+import io
 import json
-import logging   # see https://realpython.com/python-logging/
-import math
+# UNUSED: import logging   # see https://realpython.com/python-logging/
+# UNUSED: import math
 import os
-#import pathlib
+import pathlib
 from pathlib import Path
 import platform # https://docs.python.org/3/library/platform.html
 import pwd                # https://www.geeksforgeeks.org/pwd-module-in-python/
-import random
+# UNUSED: import random
 import resource
 import secrets
 import site
 import shutil     # for disk space calcs
+import smtplib
 import socket
 import string
 import subprocess
 import sys
-import time
 from typing import Dict, Any
-import urllib.request
-from urllib import request, parse, error
-import uuid
+# UNUSED: import urllib.request
+# UNUSED: from urllib import request
+# UNUSED: from urllib import parse
+# UNUSED: from urllib import error
+# UNUSED: import uuid
+std_stop_timestamp = time.monotonic()
+
+PROGRAM_NAME = os.path.basename(os.path.normpath(sys.argv[0]))
 
 
-#### SECTION 03: Third-party Python libraries (requiring pip install):
+#### SECTION 03: Third-party External Python libraries (requiring pip install):
 
+xpt_strt_timestamp = time.monotonic()   # For wall time of xpt imports
+
+# Each module should be in requirements.txt:
 try:
     # pylint: disable=wrong-import-position
     from cryptography.fernet import Fernet    # pip install cryptography
@@ -92,24 +130,63 @@ try:
     from cryptography.hazmat.primitives.asymmetric import rsa    # uv pip install cryptography
     from contextlib import redirect_stdout
     from dotenv import load_dotenv   # install python-dotenv
-    import pandas as pd
+    from email.mime.text import MIMEText
+    import keyring   # on macOS
+
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
+
+    # UNUSED: import pandas as pd
     from pathlib import Path
     import psutil      #  psutil-5.9.5
-    from pythonping import ping
+    # UNUSED: from pythonping import ping
     import pyAesCrypt            # pip install pyAesCrypt
-    import pytz   # time zones
+    # UNUSED: import pytz   # time zones
+    import qrcode
     import requests
-    import statsd
-    from tabulate import tabulate
+    # UNUSED: import statsd
+    # UNUSED: from tabulate import tabulate
     import tracemalloc
 except Exception as e:
     print(f"Python module import failed: {e}")
     # pyproject.toml file exists
-    print(f"Please activate your virtual environment:\n  python3 -m venv venv && source .venv/bin/activate")
+    # print_?() not used becuase they are defined after this line:
+    print("Please activate your virtual environment:\n  python3 -m venv venv && source .venv/bin/activate")
     exit(9)
 
+# For wall time of xpt imports:
+xpt_stop_timestamp =  time.monotonic()
 
-#### SECTION 03: Print utility globals and functions:
+
+#### SECTION 04: Local Python libraries imports:
+
+
+# Not applicable
+
+
+#### SECTION 05: Capture starting memory usage:
+
+def memory_used() -> float:
+    #import os, psutil  #  psutil-5.9.5
+    process = psutil.Process()
+    mem=process.memory_info().rss / (1024 ** 2)  # in bytes
+    print(str(process))
+    print("memory used()="+str(mem)+" MiB")
+    return mem
+
+def diskspace_free() -> float:
+    #import os, psutil  #  psutil-5.9.5
+    disk = psutil.disk_usage('/')
+    free_space_gb = disk.free / (1024 * 1024 * 1024)  # = 1024 * 1024 * 1024
+    print(f"diskspace_free()={free_space_gb:.2f} GB")
+    return free_space_gb
+
+pgm_strt_mem_used = memory_used()
+pgm_strt_disk_free = diskspace_free()
+
+
+#### SECTION 03: Print utility globals and functions (as early in pgm as possible)
 
 
 ## Global variables: Colors Styles:
@@ -170,12 +247,13 @@ def print_heading(text_in):
         print(bcolors.HEADING+bcolors.UNDERLINE,f'{text_in}', bcolors.RESET)
 
 def print_fail(text_in):  # when program should stop
-    if show_fail:
+    if show_fail:  # typically a programming error.
         # The ⛔ No Entry (Stop sign) Emoji indicates forbidden. approved as part of Unicode 5.2 in 2009 and added to Emoji 1.0 in 2015.
         print("❌", end="")
         if show_dates_in_logs:
             print(get_log_datetime(), end="")
         print(bcolors.FAIL, f'{text_in}', bcolors.RESET)
+        # PROTIP: For easier debugging, use a program exit command at point of failure rather than here.
 
 def print_error(text_in):  # when a programming error is evident
     if show_fail:
@@ -263,26 +341,7 @@ def show_print_samples() -> None:
     return None
 
 
-def current_function_name(method="A") -> str:
-    """Return the name of the current function
-    using match-case (Python 3.10+).
-    """
-    match method:
-        case "A":
-            # import sys
-            current_function = sys._getframe().f_code.co_name
-        case "B":
-            # import inspect
-            current_function = inspect.currentframe().f_code.co_name
-        case "C":
-            current_function = inspect.stack()[0][3]
-        case "D":
-            current_function = inspect.currentframe().f_back.f_code.co_name
-        case _:  # default case
-            print_error("Invalid (method)")
-            return None
-
-    return current_function
+#### Global CLI parameters:
 
 
 def do_clear_cli() -> None:
@@ -294,8 +353,82 @@ def do_clear_cli() -> None:
     return None
 
 
+#### SECTION 07 - Read custom command line (CLI) arguments controlling this program run:
+
+
+parser = argparse.ArgumentParser(description='gcp-services.py for Google Cloud Authentication')
+parser.add_argument("-q", "--quiet", action="store_true", help="Quiet")
+parser.add_argument("-v", "--verbose", action="store_true", help="Show each download")
+parser.add_argument("-vv", "--debug", action="store_true", help="Show debug")
+parser.add_argument("-l", "--log", help="Log to external file")
+
+parser.add_argument("--project", "-p", help="Google Cloud project ID")
+parser.add_argument("--service-account", "-acct", type=str, help='Path to service account key file')
+
+parser.add_argument('--setup-adc', action='store_true', help='Set up Application Default Credentials')
+parser.add_argument('--adc', action='store_true', help='Use Application Default Credentials (ADC)')
+parser.add_argument('--user', action='store_true', help='Use interactive user authentication (email)')
+parser.add_argument('--install', action='store_true', help='Install required packages')
+parser.add_argument("--format", "-fmt", choices=["table", "csv", "json"], 
+                    default="table", help="Output format (default: table)")
+parser.add_argument("-do", "--delout", action="store_true", help="Delete output file")
+# Load arguments from CLI:
+args = parser.parse_args()
+
+SHOW_QUIET = args.quiet
+SHOW_VERBOSE = args.verbose
+SHOW_DEBUG = args.debug
+# args.log
+
+# args.project
+# args.service_account
+
+# args.setup_adc
+# args.adc
+# args.user
+# args.install
+# args.format
+
+GEN_QR_CODE = False                   # TODO: Change in CLI parm
+EMAIL_FROM = "loadtesters@gmail.com"  # TODO: Change in CLI parm
+EMAIL_TO = "???"
+
+DELETE_OUTPUT_FILE = args.delout            # -de  --delout Delete output file
+
+env_file = "python-samples.env"
+ENV_FILE = "python-samples.env"
+
+
+#### SECTION 08 - Override defaults and .env file with run-time parms:
+
+
+def get_user_local_timestamp(format_str: str ="yymmddhhmm") -> str:
+    """ 
+    Returns a string formatted with datetime stamp in local timezone.
+    Not used in logs which should be in UTC.
+    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
+    """
+    current_time = time.localtime()  # localtime([secs])
+    year = str(current_time.tm_year)[-2:]  # Last 2 digits of year
+    month = str(current_time.tm_mon).zfill(2)  # .zfill(2) = zero fill
+    day = str(current_time.tm_mday).zfill(2)  # Day with leading zero
+    hour = str(current_time.tm_hour).zfill(2)  # Day with leading zero
+    minute = str(current_time.tm_min).zfill(2)  # Day with leading zero
+    if format_str == "yymmdd":
+        return f'{year}{month}{day}'
+    if format_str == "yymmddhhmm":
+        return f'{year}{month}{day}{hour}{minute}'
+
+RUNID = get_user_local_timestamp()  # "yymmddhhmm"
+
+
+
+
+
 #### SECTION 09: File timestamps and lists:
 
+
+# print_verbose(f"{sys._getframe().f_code.co_name}(): ")
 
 def filetimestamp(fileName):
     """
@@ -349,6 +482,7 @@ def list_files(basePath,validExts=None,contains=None):
 
 #### SECTION 04: Python program name:
 
+
 def print_module_filenames() -> None:
     """
     USAGE: print_filename()
@@ -373,15 +507,59 @@ def print_module_filenames() -> None:
 
     print(f"os.path.abspath(__file__):  {os.path.abspath(__file__)} ")
 
-
     return None
 
 
+def is_macos() -> str:
+    #import platform
+    # Instead of: return platform.system() == "Darwin"
+    patform_system = platform.system()
+    print_verbose(f"{sys._getframe().f_code.co_name}(): {patform_system} ")
+    if patform_system == "Darwin":
+        return True
+    else:
+        return False
 
-#### SECTION 05: Python environment variables:
+
+# Alternative approach using specific environment checks:
+def is_local_development():
+    """
+    Alternative method focusing on common deployment patterns.
+    """
+    # Check for containerized environments (usually not local)
+    if os.path.exists('/.dockerenv') or os.getenv('KUBERNETES_SERVICE_HOST'):
+        return False
+    
+    # Check for cloud platform environment variables
+    cloud_indicators = [
+        'HEROKU_APP_NAME',
+        'AWS_EXECUTION_ENV',
+        'GOOGLE_CLOUD_PROJECT',
+        'AZURE_FUNCTIONS_ENVIRONMENT',
+        'VERCEL',
+        'NETLIFY',
+    ]
+    
+    if any(os.getenv(var) for var in cloud_indicators):
+        return False
+    
+    # If none of the above, likely local
+    return True
 
 
-# See https://bomonike.github.io/python-samples/#ParseArguments
+def get_str_from_os(varname: str) -> str:
+    """Get string value from OS environment variable.
+    USAGE: api_key = get_str_from_os("OPENAI_API_KEY")
+    """
+    api_key = os.environ.get(varname, None)
+    return api_key
+
+def display_cli_parameters() -> str:
+    args_str = ""  # f"{len(sys.argv)} arguments: "
+    for index, arg in enumerate(sys.argv):
+        args_str = args_str + f" {arg} "
+    return args_str
+        # Like: CLI: ./mondrian-gen.py  -v  -vv  -ai  pgm  -dc 
 
 def set_cli_parms(count):
     """Present menu and parameters to control program
@@ -395,6 +573,34 @@ def set_cli_parms(count):
         for x in range(count):
             click.echo("Hello!")
     # Test by running: ./python-examples.py --help
+
+
+#### SECTION 05: Python .env (environment) variables:
+
+
+# See https://bomonike.github.io/python-samples/#ParseArguments
+
+
+def load_env_file(env_path: str) -> None:
+    """Read .env file containing variables and values.
+    See https://wilsonmar.github.io/python-samples/#envLoad
+    See https://stackoverflow.com/questions/40216311/reading-in-environment-variables-from-an-environment-file
+    """
+
+        # TODO: drivepath(ENV_FILE_PATH)
+        # TODO: open_env_file(ENV_FILE_PATH)
+        # TODO: read_env_file(ENV_FILE_PATH)  # calls print_samples()
+        #if DRIVE_PATH:
+        #    list_files_on_removable_drive(DRIVE_PATH)
+        # TODO: eject_drive(removable_drive_path)
+
+    openai_api_key = get_str_from_env_file('OPENAI_API_KEY')
+    if openai_api_key is None:
+        print_error("openai_api_key="+openai_api_key+" not in "+env_path)
+    else:
+        print_error("openai_api_key="+openai_api_key+" in "+env_path)
+
+    return None
 
 
 def open_env_file() -> bool:
@@ -417,6 +623,7 @@ def open_env_file() -> bool:
         print_error(global_env_path+" (global_env_path) not found!")
         return None
     else:
+        # import pathlib
         path = pathlib.Path(global_env_path)
         # Based on: pip3 install python-dotenv
         # from dotenv import load_dotenv
@@ -424,7 +631,7 @@ def open_env_file() -> bool:
         # See https://pypi.org/project/python-dotenv/
         load_dotenv(global_env_path)  # using load_dotenv
         # Wait until variables for print_trace are retrieved:
-        print_info(f"open_env_file() to \"{global_env_path}\" ")
+        print_info(f"open_env_file() to \"{global_env_path}\" or \"{path}\"")
 
     return True
 
@@ -432,8 +639,7 @@ def get_str_from_env_file(key_in) -> str:
     """Return a value of string data type from OS environment or .env file
     (using pip python-dotenv)
     """
-    # TODO: Default ENV_FILE name:
-    ENV_FILE="python-samples.env"
+    # FIXME: # TODO: Default ENV_FILE name:
 
     env_var = os.environ.get(key_in)
     if not env_var:  # yes, defined=True, use it:
@@ -477,23 +683,6 @@ def get_user_local_time() -> str:
     now: datetime = datetime.now()
     local_tz = datetime.now(timezone.utc).astimezone().tzinfo
     return f'{now:%I:%M %p (%H:%M:%S) %Y-%m-%d} {local_tz}'
-
-def get_user_local_timestamp(format_str: str ="yymmddhhmm") -> str:
-    """ 
-    Returns a string formatted with datetime stamp in local timezone.
-    Not used in logs which should be in UTC.
-    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
-    """
-    current_time = time.localtime()  # localtime([secs])
-    year = str(current_time.tm_year)[-2:]  # Last 2 digits of year
-    month = str(current_time.tm_mon).zfill(2)  # .zfill(2) = zero fill
-    day = str(current_time.tm_mday).zfill(2)  # Day with leading zero
-    hour = str(current_time.tm_hour).zfill(2)  # Day with leading zero
-    minute = str(current_time.tm_min).zfill(2)  # Day with leading zero
-    if format_str == "yymmdd":
-        return f'{year}{month}{day}'
-    if format_str == "yymmddhhmm":
-        return f'{year}{month}{day}{hour}{minute}'
 
 
 #### SECTION 06: Logging utility functions:
@@ -586,7 +775,9 @@ def get_fuid(fileName):
 def execsh(command):
     """
     USAGE: myutils.execsh("echo")
+    FIXME: PIPE?
     """
+    PIPE=subprocess.PIPE
     result = subprocess.run(command, stdout=PIPE, stderr=PIPE, universal_newlines=True, shell=True)
     return result.stdout
 
@@ -596,51 +787,11 @@ def force_link(src,linkName):
     """
     try:
         os.symlink(src,linkName)
-    except:
+    except Exception as e:
         if os.path.islink(linkName):
             os.remove(linkName)
             os.symlink(src,linkName)
-
-
-
-#### SECTION 08. Environment information metadata:
-
-
-def show_summary() -> bool:
-    """Prints summary of timings together at end of run.
-    """
-    if not SHOW_SUMMARY_COUNTS:
-        return None
-
-    pgm_stop_mem_diff = get_process_memory() - float(pgm_strt_mem_used)
-    print_info(f"{pgm_stop_mem_diff:.2f} MB memory consumed during run {RUNID}.")
-
-    pgm_stop_disk_free, pct_disk_free_now = get_disk_free()
-    pgm_stop_disk_diff = pgm_strt_disk_free - pgm_stop_disk_free
-    print_info(f"{pgm_stop_disk_diff:.2f} GB disk space consumed during run {RUNID}. {pct_disk_free_now} remaining.")
-
-    print_separator()
-    print_heading("Monotonic wall timings (seconds):")
-    # TODO: Write to log for longer-term analytics
-
-    # For wall time of std imports:
-    std_elapsed_wall_time = std_stop_timestamp -  std_strt_timestamp
-    print_verbose("for import of Python standard libraries: "+ \
-        f"{std_elapsed_wall_time:.4f}")
-
-    # For wall time of xpt imports:
-    xpt_elapsed_wall_time = xpt_stop_timestamp -  xpt_strt_timestamp
-    print_verbose("for import of Python extra    libraries: "+ \
-        f"{xpt_elapsed_wall_time:.4f}")
-
-    pgm_stop_timestamp =  time.monotonic()
-    pgm_elapsed_wall_time = pgm_stop_timestamp -  pgm_strt_timestamp
-    # pgm_stop_perftimestamp = time.perf_counter()
-    print_verbose("for whole program run:                   "+ \
-        f"{pgm_elapsed_wall_time:.4f}")
-
-    # TODO: Write wall times to log for longer-term analytics
-    return True
+        print_error(f"{sys._getframe().f_code.co_name}(): {e}")
 
 
 # See https://bomonike.github.io/python-samples/#run_env
@@ -663,6 +814,7 @@ def os_platform():
         exit(1)  # entire program
     return my_platform
 
+
 def macos_version_name(release_in):
     """Returns the marketing name of macOS versions which are not available
     from the running macOS operating system.
@@ -675,6 +827,7 @@ def macos_version_name(release_in):
     # FIXME: https://github.com/nexB/scancode-plugins/blob/main/etc/scripts/homebrew.py
     # See https://support.apple.com/en-us/HT201260 and https://www.wikiwand.com/en/MacOS_version_history
     MACOS_VERSIONS = {
+        '22.8': ['Next2025', 2025, '25'],
         '22.7': ['Next2024', 2024, '24'],
         '22.6': ['macOS Sonoma', 2023, '23'],
         '22.5': ['macOS Ventura', 2022, '13'],
@@ -714,6 +867,293 @@ def macos_version_name(release_in):
     print_trace("macos_info="+str(macos_info))
     print_trace("macos_platform_release="+macos_platform_release)
     return macos_platform_release
+
+
+#### SECTION 10: System Networking functions:
+
+
+def is_running_locally() -> bool:
+    """
+    Returns True if the program is running in a local development environment.
+    Returns False if in production/remote environment (within a server/VM).
+    """    
+    # Method 1: Check for common local development indicators:
+    local_indicators = [
+        # Development environment variables
+        os.getenv('DEVELOPMENT') == 'true',
+        os.getenv('DEBUG') == 'true',
+        os.getenv('ENV') == 'development',
+        os.getenv('ENVIRONMENT') == 'local',
+        
+        # Common local hostnames/IPs:
+        socket.gethostname().lower() in ['localhost', '127.0.0.1'],
+        
+        # Check if running on local IP ranges
+        _is_local_ip(),
+        
+        # Development tools/paths present
+        Path('.git').exists(),  # Git repository
+        Path('requirements.txt').exists() or Path('pyproject.toml').exists(),
+        
+        # Interactive terminal (likely local development)
+        sys.stdin.isatty() and sys.stdout.isatty(),
+    ]
+    
+    return any(local_indicators)
+
+def _is_local_ip():
+    """Check if running on a local IP address."""
+    try:
+        # Get local IP by connecting to external address
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            
+        # Check if IP is in private ranges
+        ip_parts = local_ip.split('.')
+        if len(ip_parts) == 4:
+            first_octet = int(ip_parts[0])
+            second_octet = int(ip_parts[1])
+            
+            # Private IP ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+            return (first_octet == 10 or 
+                   (first_octet == 172 and 16 <= second_octet <= 31) or
+                   (first_octet == 192 and second_octet == 168) or
+                   local_ip == '127.0.0.1')
+    except Exception as e:
+        print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return False
+
+def get_environment_info():
+    """Returns a dictionary of detailed information about the current environment.
+    """
+    return {
+        'hostname': socket.gethostname(),
+        'platform': sys.platform,
+        'python_version': sys.version,
+        'working_directory': os.getcwd(),
+        'environment_vars': {
+            'PATH': os.getenv('PATH', ''),
+            'HOME': os.getenv('HOME', ''),
+            'USER': os.getenv('USER', ''),
+            'SHELL': os.getenv('SHELL', ''),
+        },
+        'is_interactive': sys.stdin.isatty(),
+        'has_git': Path('.git').exists(),
+        'local_ip': _get_local_ip(),
+    }
+
+def _get_local_ip():
+    """Returns the local IP address such as 192.168.1.23. 
+    By "connecting" to an external UDP address such as 8.8.8.8 (Google's DNS), 
+    the operating system's routing table determines which 
+    local network interface (and its associated IP address) 
+    is used to reach the internet rather than localhost (127.0.0.1).
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception as e:
+        print(f"{sys._getframe().f_code.co_name}(): {e}")
+        return "Unknown"
+
+
+#### SECTION 09: OS Process memory handling:
+
+
+def get_process_memory() -> float:
+    """
+    Returns MiB of memory used by the current process.
+    """
+    # import os, psutil  #  psutil-5.9.5
+    process = psutil.Process(os.getpid())
+    # Divide by (1024 * 1024) to convert bytes to MB:
+    mem=process.memory_info().rss / 1048576
+    print_trace(f"{str(process)} MiB from get_process_memory()")
+    return float(mem)
+
+def get_all_objects_by_type():
+    """Get memory usage by object type."""
+    type_sizes = defaultdict(int)
+    type_counts = defaultdict(int)
+    
+    # Force garbage collection to get more accurate results:
+    # import gc
+    gc.collect()
+    
+    # Get all objects tracked by the garbage collector
+    for obj in gc.get_objects():
+        try:
+            obj_type = type(obj).__name__
+            # import sys
+            obj_size = sys.getsizeof(obj)
+            type_sizes[obj_type] += obj_size
+            type_counts[obj_type] += 1
+        except Exception as e:
+            print_verbose(f"{sys._getframe().f_code.co_name}(): {e} ")
+            pass  # Skip objects that can't be processed
+    
+    return type_sizes, type_counts
+
+def trace_memory_usage(func):
+    """Decorator @trace_memory_usage to trace memory usage before and after 
+    calling a function that uses a dubiously large amount of memory.
+    """
+    def wrapper(*args, **kwargs):
+        tracemalloc.start()
+        start_memory = get_process_memory()
+        print_verbose(f"{'Memory before:':<43} {start_memory:.2f} MB")
+        
+        result = func(*args, **kwargs)
+        
+        current, peak = tracemalloc.get_traced_memory()
+        print_verbose(f"    {'tracemalloc current:':<43} {current / (1024 * 1024):.2f} MB")
+        print_verbose(f"    {'tracemalloc peak:':<43} {peak / (1024 * 1024):.2f} MB")
+        end_memory = get_process_memory()
+        print_verbose(f"    {'Memory after:':<43} {end_memory:.2f} MB")
+        print_verbose(f"    {'Memory used:':<43} {end_memory - start_memory:.2f} MB")
+        
+        # import tracemalloc
+        tracemalloc.stop()
+        return result
+    
+    return wrapper
+
+def show_memory_profile():
+    """Print detailed memory usage information.
+    """
+    GB_BYTES = 1073741824  # = 1024 * 1024 * 1024 = Terrabyte
+
+    print_verbose("show_memory_profile():")
+
+    system_memory = psutil.virtual_memory()
+    print_verbose(f"psutil.virtual_memory(): {system_memory.percent}% "
+        f"(Available: {system_memory.available / GB_BYTES:.2f} GB"
+        f", System: {system_memory.total / GB_BYTES:.2f} GB)")
+
+    print_verbose(f"{'    Total process memory: ':<43} {get_process_memory():.2f} MB")
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    print_verbose(f"{'    RSS (Resident Set Size):':<43} {memory_info.rss / (1024 * 1024):.2f} MB")
+    print_verbose(f"{'    VMS (Virtual Memory Size):':<43} {memory_info.vms / (1024 * 1024):.2f} MB")
+    
+    # Get memory usage by type
+    type_sizes, type_counts = get_all_objects_by_type()
+    
+    # Show top 10 memory consumers by type
+    print_verbose("Top 10 memory consumers by type:")
+    top_types = sorted(type_sizes.items(), key=lambda x: x[1], reverse=True)[:10]
+    for obj_type, size in top_types:
+        count = type_counts[obj_type]
+        print_verbose(f"    {obj_type:<43} {size / (1024 * 1024):.2f} MB ({count} objects)")
+    
+    # Show other system information
+    # print(f"\nPython version: {sys.version}")
+    
+
+#### SECTION 09: Storage Disk space information:
+
+
+def get_disk_free() -> (float, str):
+    """
+    Returns float GB of disk space free and text of percentage free.
+    References global GB_BYTES.
+    """
+    GB_BYTES = 1073741824  # = 1024 * 1024 * 1024 = Terrabyte
+    # import shutil
+    # Replace '/' with your target path (e.g., 'C:\\' on Windows)
+    usage = shutil.disk_usage('/')
+    pct_free = ( float(usage.free) / float(usage.total) ) * 100
+    disk_gb_free = float(usage.free) / GB_BYTES
+    disk_pct_free = f"{pct_free:.2f}%"
+    # print_verbose(f"get_disk_free(): {disk_gb_free:.2f} ({pct_free:.2f}%) disk free")
+    return disk_gb_free, disk_pct_free
+
+
+#### SECTION 09: Python file handling:
+
+
+def stats_to_file(filepath) -> bool:
+    """
+    Redirects system info stdout to a file using contextlib, 
+    which is the cleanest and most pythonic way.
+    """
+    if not filepath:  # if filepath is empty
+       filepath = f"{os.getcwd()}/stats_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+    elif os.path.isfile(filepath):  # if file exists, so append:
+        try:
+            with open('append_output.txt', 'a') as f:
+                original_stdout = sys.stdout
+                sys.stdout = f
+                
+                macos_sys_info()  # appended to existing file.
+                
+                sys.stdout = original_stdout
+        except Exception as e:
+            print(f"{sys._getframe().f_code.co_name}(\"{filepath}\") append: {e}")
+    else:  # not exist:
+        try:
+            # from contextlib import redirect_stdout
+            with open(filepath, 'w') as f:
+                with redirect_stdout(f):
+                    macos_sys_info()
+            # print("Back to console")
+            return True
+        except Exception as e:
+            print(f"{sys._getframe().f_code.co_name}(\"{filepath}\") add: {e}")
+    return False
+
+
+def list_files_on_removable_drive(drive_path: str) -> None:
+    """List all directories and files on a removable USB volumedrive.
+    where drive_path = "/Volumes/DRIVE_VOLUME"
+    """
+    #import os
+    #from pathlib import Path
+    drive = Path("/Volumes/" + drive_path)
+    if not drive.is_mount():   # NOT mounted:
+        print_warning(f'/Volumes/Drive \"{drive_path}\" not mounted (plugged in). Ignored.')
+        return
+    else:
+        print(f'{drive_path} is --drivepath \"DRIVE_PATH\":')
+
+    for item in drive.iterdir():
+        if item.is_dir():
+            print_info(f'Directory: {item.name}')
+        elif item.is_file():
+            print_info(f'File: {item.name}')
+    return None
+
+
+def count_files_within_path(directory: str) -> int:
+    """Returns the number of files after looking recursively
+    within a given directory"""
+    # import os
+    file_count = 0
+    for entry in os.listdir(directory):
+        if os.path.isfile(os.path.join(directory, entry)):
+            file_count += 1
+    return file_count
+
+
+def get_file_size_on_disk(file_path: str) -> int:
+    """Returns integer bytes from the OS for a file path """
+    try:
+        file_size = os.path.getsize(file_path)
+        return file_size
+        # Alternately:
+        # stat_result = os.stat(file_path)
+        # return stat_result.st_blocks * 512  # st_blocks is in 512-byte units
+    except FileNotFoundError:
+        print(f"*** File path not found: {file_path}")
+        return 0
+    except Exception as e:
+        print(f"*** Error getting file size: {e}")
+        return 0
+
+
+#### SECTION 09: Display System information:
 
 
 def macos_sys_info():
@@ -832,255 +1272,46 @@ def macos_sys_info():
     #    print_info(localize_blob("Disk space free")+"="+disk_space_free+" GB")
         # left-to-right order of fields are re-arranged from the function's output.
 
-    is_uv_venv_activated()  # both True:
+    # is_uv_venv_activated()  # both True:
 
 
-def is_running_locally() -> bool:
+def show_summary() -> bool:
+    """Prints summary of timings together at end of run.
     """
-    Returns True if the program is running in a local development environment.
-    Returns False if in production/remote environment (within a server/VM).
-    """    
-    # Method 1: Check for common local development indicators:
-    local_indicators = [
-        # Development environment variables
-        os.getenv('DEVELOPMENT') == 'true',
-        os.getenv('DEBUG') == 'true',
-        os.getenv('ENV') == 'development',
-        os.getenv('ENVIRONMENT') == 'local',
-        
-        # Common local hostnames/IPs:
-        socket.gethostname().lower() in ['localhost', '127.0.0.1'],
-        
-        # Check if running on local IP ranges
-        _is_local_ip(),
-        
-        # Development tools/paths present
-        Path('.git').exists(),  # Git repository
-        Path('requirements.txt').exists() or Path('pyproject.toml').exists(),
-        
-        # Interactive terminal (likely local development)
-        sys.stdin.isatty() and sys.stdout.isatty(),
-    ]
-    
-    return any(local_indicators)
+    if not SHOW_SUMMARY_COUNTS:
+        return None
 
-def _is_local_ip():
-    """Check if running on a local IP address."""
-    try:
-        # Get local IP by connecting to external address
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            
-        # Check if IP is in private ranges
-        ip_parts = local_ip.split('.')
-        if len(ip_parts) == 4:
-            first_octet = int(ip_parts[0])
-            second_octet = int(ip_parts[1])
-            
-            # Private IP ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
-            return (first_octet == 10 or 
-                   (first_octet == 172 and 16 <= second_octet <= 31) or
-                   (first_octet == 192 and second_octet == 168) or
-                   local_ip == '127.0.0.1')
-    except:
-        return False
+    print_separator()
+    print_heading(f"{sys._getframe().f_code.co_name}():")
 
-def get_environment_info():
-    """Returns a dictionary of detailed information about the current environment.
-    """
-    return {
-        'hostname': socket.gethostname(),
-        'platform': sys.platform,
-        'python_version': sys.version,
-        'working_directory': os.getcwd(),
-        'environment_vars': {
-            'PATH': os.getenv('PATH', ''),
-            'HOME': os.getenv('HOME', ''),
-            'USER': os.getenv('USER', ''),
-            'SHELL': os.getenv('SHELL', ''),
-        },
-        'is_interactive': sys.stdin.isatty(),
-        'has_git': Path('.git').exists(),
-        'local_ip': _get_local_ip(),
-    }
+    pgm_stop_mem_diff = get_process_memory() - float(pgm_strt_mem_used)
+    print_info(f"{pgm_stop_mem_diff:.2f} MB memory consumed during run {RUNID}.")
 
-def _get_local_ip():
-    """Returns the local IP address such as 192.168.1.23. 
-    By "connecting" to an external UDP address such as 8.8.8.8 (Google's DNS), 
-    the operating system's routing table determines which 
-    local network interface (and its associated IP address) 
-    is used to reach the internet rather than localhost (127.0.0.1).
-    """
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
-    except Exception as e:
-        print(f"{sys._getframe().f_code.co_name}(): {e}")
-        return "Unknown"
+    pgm_stop_disk_free, pct_disk_free_now = get_disk_free()
+    pgm_stop_disk_diff = pgm_strt_disk_free - pgm_stop_disk_free
+    print_info(f"{pgm_stop_disk_diff:.2f} GB disk space consumed during run {RUNID}. {pct_disk_free_now} remaining.")
 
+    print_heading("Monotonic wall timings (seconds):")
+    # TODO: Write to log for longer-term analytics
 
-# Alternative approach using specific environment checks:
-def is_local_development():
-    """
-    Alternative method focusing on common deployment patterns.
-    """
-    # Check for containerized environments (usually not local)
-    if os.path.exists('/.dockerenv') or os.getenv('KUBERNETES_SERVICE_HOST'):
-        return False
-    
-    # Check for cloud platform environment variables
-    cloud_indicators = [
-        'HEROKU_APP_NAME',
-        'AWS_EXECUTION_ENV',
-        'GOOGLE_CLOUD_PROJECT',
-        'AZURE_FUNCTIONS_ENVIRONMENT',
-        'VERCEL',
-        'NETLIFY',
-    ]
-    
-    if any(os.getenv(var) for var in cloud_indicators):
-        return False
-    
-    # If none of the above, likely local
+    # For wall time of std imports:
+    std_elapsed_wall_time = std_stop_timestamp -  std_strt_timestamp
+    print_verbose("for import of Python standard libraries: "+ \
+        f"{std_elapsed_wall_time:.4f}")
+
+    # For wall time of xpt imports:
+    xpt_elapsed_wall_time = xpt_stop_timestamp -  xpt_strt_timestamp
+    print_verbose("for import of Python extra    libraries: "+ \
+        f"{xpt_elapsed_wall_time:.4f}")
+
+    pgm_stop_timestamp =  time.monotonic()
+    pgm_elapsed_wall_time = pgm_stop_timestamp -  pgm_strt_timestamp
+    # pgm_stop_perftimestamp = time.perf_counter()
+    print_verbose("for whole program run:                   "+ \
+        f"{pgm_elapsed_wall_time:.4f}")
+
+    # TODO: Write wall times to log for longer-term analytics
     return True
-
-
-def get_disk_free() -> (float, str):
-    """
-    Returns float GB of disk space free and text of percentage free.
-    References global GB_BYTES.
-    """
-    GB_BYTES = 1073741824  # = 1024 * 1024 * 1024 = Terrabyte
-    # import shutil
-    # Replace '/' with your target path (e.g., 'C:\\' on Windows)
-    usage = shutil.disk_usage('/')
-    pct_free = ( float(usage.free) / float(usage.total) ) * 100
-    disk_gb_free = float(usage.free) / GB_BYTES
-    disk_pct_free = f"{pct_free:.2f}%"
-    # print_verbose(f"get_disk_free(): {disk_gb_free:.2f} ({pct_free:.2f}%) disk free")
-    return disk_gb_free, disk_pct_free
-
-
-def get_process_memory() -> float:
-    """
-    Returns MiB of memory used by the current process.
-    """
-    # import os, psutil  #  psutil-5.9.5
-    process = psutil.Process(os.getpid())
-    # Divide by (1024 * 1024) to convert bytes to MB:
-    mem=process.memory_info().rss / 1048576
-    print_trace(f"{str(process)} MiB from get_process_memory()")
-    return float(mem)
-
-def get_all_objects_by_type():
-    """Get memory usage by object type."""
-    type_sizes = defaultdict(int)
-    type_counts = defaultdict(int)
-    
-    # Force garbage collection to get more accurate results:
-    # import gc
-    gc.collect()
-    
-    # Get all objects tracked by the garbage collector
-    for obj in gc.get_objects():
-        try:
-            obj_type = type(obj).__name__
-            # import sys
-            obj_size = sys.getsizeof(obj)
-            type_sizes[obj_type] += obj_size
-            type_counts[obj_type] += 1
-        except:
-            pass  # Skip objects that can't be processed
-    
-    return type_sizes, type_counts
-
-def trace_memory_usage(func):
-    """Decorator @trace_memory_usage to trace memory usage before and after 
-    calling a function that uses a dubiously large amount of memory.
-    """
-    def wrapper(*args, **kwargs):
-        tracemalloc.start()
-        start_memory = get_process_memory()
-        print_verbose(f"{'Memory before:':<43} {start_memory:.2f} MB")
-        
-        result = func(*args, **kwargs)
-        
-        current, peak = tracemalloc.get_traced_memory()
-        print_verbose(f"    {'tracemalloc current:':<43} {current / (1024 * 1024):.2f} MB")
-        print_verbose(f"    {'tracemalloc peak:':<43} {peak / (1024 * 1024):.2f} MB")
-        end_memory = get_process_memory()
-        print_verbose(f"    {'Memory after:':<43} {end_memory:.2f} MB")
-        print_verbose(f"    {'Memory used:':<43} {end_memory - start_memory:.2f} MB")
-        
-        # import tracemalloc
-        tracemalloc.stop()
-        return result
-    
-    return wrapper
-
-def show_memory_profile():
-    """Print detailed memory usage information.
-    """
-    GB_BYTES = 1073741824  # = 1024 * 1024 * 1024 = Terrabyte
-
-    print_verbose("show_memory_profile():")
-
-    system_memory = psutil.virtual_memory()
-    print_verbose(f"psutil.virtual_memory(): {system_memory.percent}% "
-        f"(Available: {system_memory.available / GB_BYTES:.2f} GB"
-        f", System: {system_memory.total / GB_BYTES:.2f} GB)")
-
-    print_verbose(f"{'    Total process memory: ':<43} {get_process_memory():.2f} MB")
-    process = psutil.Process(os.getpid())
-    memory_info = process.memory_info()
-    print_verbose(f"{'    RSS (Resident Set Size):':<43} {memory_info.rss / (1024 * 1024):.2f} MB")
-    print_verbose(f"{'    VMS (Virtual Memory Size):':<43} {memory_info.vms / (1024 * 1024):.2f} MB")
-    
-    # Get memory usage by type
-    type_sizes, type_counts = get_all_objects_by_type()
-    
-    # Show top 10 memory consumers by type
-    print_verbose("Top 10 memory consumers by type:")
-    top_types = sorted(type_sizes.items(), key=lambda x: x[1], reverse=True)[:10]
-    for obj_type, size in top_types:
-        count = type_counts[obj_type]
-        print_verbose(f"    {obj_type:<43} {size / (1024 * 1024):.2f} MB ({count} objects)")
-    
-    # Show other system information
-    # print(f"\nPython version: {sys.version}")
-    
-
-def stats_to_file(filepath) -> bool:
-    """
-    Redirects system info stdout to a file using contextlib, 
-    which is the cleanest and most pythonic way.
-    """
-    if not filepath:  # if filepath is empty
-       filepath = f"{os.getcwd()}/stats_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
-    elif os.path.isfile(filepath):  # if file exists, so append:
-        try:
-            with open('append_output.txt', 'a') as f:
-                original_stdout = sys.stdout
-                sys.stdout = f
-                
-                macos_sys_info()  # appended to existing file.
-                
-                sys.stdout = original_stdout
-        except Exception as e:
-            print(f"{sys._getframe().f_code.co_name}(\"{filepath}\") append: {e}")
-    else:  # not exist:
-        try:
-            # from contextlib import redirect_stdout
-            with open(filepath, 'w') as f:
-                with redirect_stdout(f):
-                    macos_sys_info()
-            # print("Back to console")
-            return True
-        except Exception as e:
-            print(f"{sys._getframe().f_code.co_name}(\"{filepath}\") add: {e}")
-    return False
 
 
 #### SECTION 08: Python code utilities:
@@ -1177,9 +1408,38 @@ def print_dunder_vars(filename) -> str:
     except Exception as e:
         print(f"{sys._getframe().f_code.co_name}() Error: {e}! ")
         sys.exit(1)
-
+# zzz
 
 #### Encryption on Drives
+
+
+def get_api_key(app_id: str, account_name: str) -> str:
+    """Get API key from macOS Keyring file or .env file (depending on what's available)
+    referencing global variables keyring_service_name & keyring_account_name
+    USAGE: api_key = get_api_key("anthropic","johndoe")
+    """
+    print_verbose("get_api_key() app_id="+app_id+", account_name="+account_name)
+
+    if is_macos():
+        # Pull sd_api_key as password from macOS Keyring file (and other password manager):
+        try:
+            #import keyring
+            api_key = keyring.get_password(app_id,account_name)
+            if api_key:
+                print_trace("get_api_key() len(api_key)="+str(len(api_key))+" chars.")
+                return api_key
+            else:
+                # FIXME: sd_api_key=None
+                print_error("get_api_key() api_key=None")
+                return None
+        except Exception as e:
+            print_error(f"{sys._getframe().f_code.co_name}(): str({e})")
+            return None
+    else:
+        print_error(f"{sys._getframe().f_code.co_name}(): not macOS. Obtain key from .env file?")
+    
+    return None
+
 
 
 def list_disk_space_by_device() -> None:
@@ -1198,8 +1458,10 @@ def list_disk_space_by_device() -> None:
             # Check if the volume is removable
             cmd = f"diskutil info {partition.device}"
             output = subprocess.check_output(cmd, shell=True).decode('utf-8')
-            if "Removable Media: Yes" in output:
-                removable_volumes.append(partition.mountpoint)
+            print_verbose(f"{sys._getframe().f_code.co_name}(): output: \"{output}\" ")
+            #if "Removable Media: Yes" in output:
+            # FIXME:
+            #    removable_volumes.append(partition.mountpoint)
         try:
             usage = psutil.disk_usage(partition.mountpoint)
             print("   "+f"{usage.total / (1024 * 1024 * 1024):.2f} GB".rjust(10) +
@@ -1215,9 +1477,9 @@ def list_disk_space_by_device() -> None:
 def list_macos_volumes() -> None:
     """ Like Bash CLI: diskutil list
     STATUS: NOT WORKING
-    volumes_path = '/Volumes'
     volumes = os.listdir(volumes_path)
     """
+    volumes_path = '/Volumes'
     print("*** Drive Volumes:")
     removable_volumes = []
     import psutil
@@ -1283,7 +1545,9 @@ def read_file_from_removable_drive(drive_path: str, file_name: str, content: str
     else:
         print_info("global_env_path "+global_env_path+" is readable.")
 
+    # import pathlib
     path = pathlib.Path(global_env_path)
+    print_verbose(f"{sys._getframe().f_code.co_name}(): \"{path}\" ")
     # Based on: pip3 install python-dotenv
     # from dotenv import load_dotenv
        # See https://www.python-engineer.com/posts/dotenv-python/
@@ -1296,7 +1560,7 @@ def read_file_from_removable_drive(drive_path: str, file_name: str, content: str
 
     # After pip install envcload
     # from envcloak import load_encrypted_env
-    load_encrypted_env('.env.enc', key_file='mykey.key').to_os_env()
+    #FIXME: Where is? load_encrypted_env('.env.enc', key_file='mykey.key').to_os_env()
         # Now os.environ contains the decrypted variables
 
     return global_env_path
@@ -1341,33 +1605,7 @@ def eject_drive(drive_path: str) -> None:
     return None
 
 
-
-def get_api_key(app_id: str, account_name: str) -> str:
-    """Get API key from macOS Keyring file or .env file (depending on what's available)
-    referencing global variables keyring_service_name & keyring_account_name
-    USAGE: api_key = get_api_key("anthropic","johndoe")
-    """
-    print_verbose("get_api_key() app_id="+app_id+", account_name="+account_name)
-
-    if is_macos():
-        # Pull sd_api_key as password from macOS Keyring file (and other password manager):
-        try:
-            #import keyring
-            api_key = keyring.get_password(app_id,account_name)
-            if api_key:
-                print_trace("get_api_key() len(api_key)="+str(len(api_key))+" chars.")
-                return api_key
-            else:
-                # FIXME: sd_api_key=None
-                print_error("get_api_key() api_key=None")
-                return None
-        except Exception as e:
-            print_error("get_api_key() str({e})")
-            return None
-    else:
-        print_error("get_api_key() not macOS. Obtain key from .env file?")
-    
-    return None
+#### URLs
 
 
 def shorten_url(long_url: str) -> str:
@@ -1445,33 +1683,44 @@ def gen_random_alphanumeric(length=12):
 def generate_rsa_keypair(key_size=2048, save_to_files=True, output_dir="~/.keys"):
     """
     Generate RSA private/public key pair
-    
+    private_key.pem & public_key.pem
     Args:
         key_size (int): Size of the RSA key (default: 2048)
         save_to_files (bool): Whether to save keys to files
-        output_dir (str): Directory to save key files
-    
+        output_dir (str): Directory to save key files,
+        where "~/.keys" is a hidden folder in the user's home directory.
     Returns:
         tuple: (private_key_pem, public_key_pem) as bytes
     """
-    
-    # Generate private key
+    # from pathlib import Path
+    output_dir = Path(output_dir).resolve()
+    if output_dir.name == '.git' and output_dir.is_dir():
+        print_fail(f"{sys._getframe().f_code.co_name}(): output_dir: \"{output_dir}\" contains a .git directory!")
+        exit(9)
+    # Check each parent directory for .git folder
+    for parent in [output_dir] + list(output_dir.parents):
+        git_path = parent / '.git'
+        if git_path.exists() and git_path.is_dir():
+            print_fail(f"{sys._getframe().f_code.co_name}(): .git in parent directory: \"{git_path}\" ")
+            exit(9)
+
+    # Generate private key:
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=key_size,
     )
     
-    # Get public key from private key
+    # Get public key from private key:
     public_key = private_key.public_key()
     
-    # Serialize private key to PEM format
+    # Serialize private key to PEM format:
     private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption()
     )
     
-    # Serialize public key to PEM format
+    # Serialize public key to PEM format:
     public_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -1496,14 +1745,14 @@ def generate_rsa_keypair(key_size=2048, save_to_files=True, output_dir="~/.keys"
         os.chmod(public_key_path, 0o644)
         
         print(f"Private key saved to: {private_key_path}")
-        print(f"Public key saved to: {public_key_path}")
+        print(f"Public key saved to:  {public_key_path}")
     
     return private_pem, public_pem
 
 def generate_encrypted_keypair(password, key_size=2048, output_dir="~/.keys"):
     """
     Generate RSA key pair with encrypted private key
-    
+    private_key_encrypted.pem & public_key.pem
     Args:
         password (str): Password to encrypt the private key
         key_size (int): Size of the RSA key
@@ -1619,6 +1868,8 @@ def encrypt_symmetrically(source_file_path: str, cyphertext_file_path: str) -> s
     """
     func_start_timer = time.perf_counter()
     
+    ENCRYPTION_KEY = gen_random_alphanumeric(32)  # like "abc123def456"  # 12 char.
+
     # Generate a 32-byte random encryption key like J64ZHFpCWFlS9zT7y5zxuQN1Gb09y7cucne_EhuWyDM=
     if not ENCRYPTION_KEY:   # global variable
         # pip install cryptography  # cryptography-44.0.0
@@ -1663,7 +1914,7 @@ def encrypt_secret(cleartext_in=None):
     # CAUTION: token is a command which outputs the token b'...(don't do it)
     # decrypted_text = f.decrypt(token)
       # b'A really secret message. Not for prying eyes.'
-    myutils.print_verbose(f"Encrypted binary token contains {len(str(binary_token))} characters.")
+    print_verbose(f"Encrypted binary token contains {len(str(binary_token))} characters.")
     # CAUTION: It is a security violation to display secure tokens in the console.
     return binary_token
 
@@ -1712,17 +1963,18 @@ def save_key_in_keychain(svc: str, acct: str, key: str) -> bool:
     2. encrypt(my_secret_key)
     3. save_key_in_keychain("pgm", "mondrian", "my-secret-key")
     """
-    print_verbose("save_key_in_keychain() "+svc+", "+acct+", len="+str(len(key)))
+    print_verbose(f"{sys._getframe().f_code.co_name}(): {svc} {acct} len={str(len(key))} ")
     # import keyring
     keyring.set_password(svc, acct, key)
 
     # Retrieve a password:
     retrieved_key = keyring.get_password(svc, acct)
     if retrieved_key != key:
-        print_error("save_key_in_keychain() key not found in Keychain.")
+        print_error(f"{sys._getframe().f_code.co_name}(): key not found in Keychain.")
         return False
     else:
-        print_trace(f"save_key_in_keychain() done.")
+        # WARNING: Do not expose secret info using print:
+        print_verbose(f"{sys._getframe().f_code.co_name}(): {len(retrieved_key)} chars.")
         return True
 
 
@@ -1743,8 +1995,8 @@ def send_smtp() -> bool:
     """
     password = get_api_key("gmail",EMAIL_FROM)  # loadtesters
     if not password:
-        print_error("send_smtp() does not have password needed.")
-        return False
+        print_fail(f"{sys._getframe().f_code.co_name}(): password needed.")
+        exit()
 
     recipients = EMAIL_TO  # Recipients as a list: "[ 1@example.com, 2@example.com ]"
     if recipients is None:   # Not a list
@@ -1752,11 +2004,12 @@ def send_smtp() -> bool:
         return False
     
     #import smtplib
-    #from email.mime.text import MIMEText
-    body = f"From send_smtp() using Gmail SMTP."
+    body = "From send_smtp() using Gmail SMTP."
         # TODO: Add log lines captured into log database during run.
+    #from email.mime.text import MIMEText
     msg = MIMEText(body)
     msg['From'] = EMAIL_FROM
+    # TODO:
     msg['Subject'] = f"From {PROGRAM_NAME} for {RUNID}"
 
     for index, recipient in enumerate(recipients.split(",")):
@@ -1808,10 +2061,15 @@ def is_only_numbers(variable):
     return str(variable).isdigit()
 
 
-
-def main():
+def main():   # SAMPLE USAGE:
 
     do_clear_cli()
+    print_verbose(f"Started: {get_user_local_time()}, in logs: {get_log_datetime()} ")
+    pgm_strt_mem_used = get_process_memory()
+    print_verbose(f"Started: {pgm_strt_mem_used:.2f} MiB RAM being used.")
+    pgm_strt_disk_free, pgm_strt_pct_disk_free = get_disk_free()
+    print_verbose(f"Started: {pgm_strt_disk_free:.2f} GB ({pgm_strt_pct_disk_free}) disk space free.")
+
     show_print_samples()
     print_module_filenames()
     get_environment_info()    
@@ -1860,9 +2118,14 @@ def main():
     generate_rsa_keypair(key_size=4096, output_dir="./large_keys")
     file_path="./large_keys/private_key.pem"
     private_rsa_key_clear_text = read_file_to_string(file_path)
-    # DO NOT PRINT SECRETS: private_rsa_key_clear_text
-    delete_all_files_in_folder(folder_path)
+    print_verbose(f"private_rsa_key_clear_text: {len(private_rsa_key_clear_text)} bytes")
+       # DO NOT PRINT SECRETS: private_rsa_key_clear_text
+
+    if DELETE_OUTPUT_FILE:  # -do --delout
+        # Instead of: os.remove(folder_path)
+        delete_all_files_in_folder(folder_path)
+
+    show_summary()
 
 if __name__ == "__main__":
     main()
-

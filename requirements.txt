@@ -1,11 +1,18 @@
 # requirements.txt file processed by: 
 # pip install --upgrade -r requirements.txt
 # pip-audit -r requirements.txt
+# See https://realpython.com/podcasts/rpp/249/ new pylock.toml defined in PEP 751
+
+black
+ruff
+flake8
 
 aiohttp   # for async features
 asyncio
 bokeh
+cryptography
 fastapi
+keyring
 flask
 
 google-api-python-client   # Google API Python Client for Google Workspace APIs, general REST APIs
@@ -36,7 +43,8 @@ pathlib
 plotly     # matplotlib interactively
 psutil     # psutil-7.0.0
 pydantic
-pylint 
+pylint
+pyAesCrypt
 python-dotenv
 pythonping
 pytz

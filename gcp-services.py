@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MPL-2.0
-__commit_date__ = "2025-05-29"
-__last_commit__ = "v012 + Workload Identity Federation :gcp-services.py"
+__commit_date__ = "2025-06-06"
+__last_commit__ = "v014 + ruff fixes :gcp-services.py"
 __repository__ = "https://github.com/bomonike/google/blob/main/gcp-services.py"
+__status__ = "WORKING: ruff check gcp-services.py => All checks passed!"
 
 """gcp-services.py
 
@@ -26,24 +27,27 @@ ruff check gcp-services.py
    gcp-setup.sh  # to install modules (gcloud, pip, etc.) such as:
         brew install google-cloud-sdk  # See https://cloud.google.com/sdk/docs/install-sdk
 
-        # Set permissions:            
-        chmod +x ./gcp-services.py
-
         deactivate       # out from within venv
         brew install uv  # new package manager
         # See all available versions for a minor release:
-        uv python list 3.12   # list releases available
-        uv python install 3.12.10 --default
+        uv python list 3.13   # list releases available
+        uv python install 3.13.3   # --default
+
         uv --help
-        uv init   # for pyproject.toml & .python-version files https://packaging.python.org/en/latest/guides/writing-pyproject-toml/
+        uv init   # create pyproject.toml & .python-version files https://packaging.python.org/en/latest/guides/writing-pyproject-toml/
         uv lock
-        uv sync
+        uv sync   # creates .venv folder & uv.lock file
         uv venv  # to create an environment,
         source .venv/bin/activate
-        ./scripts/activate       # PowerShell only
-        ./scripts/activate.bat   # Windows CMD only
+        or: ./scripts/activate       # PowerShell only
+        or: ./scripts/activate.bat   # Windows CMD only
+        
+        uv uv pip install -e .    # Editable Install (for development)
+        uv uv pip install -r requirements.txt
+        chmod +x ./gcp-services.py
+        ./gcp-services.py
 
-# 2. Run requirements.txt (instead of python -m pip install tzdata ...):
+# 2. Run requirements.txt (instead of python -m uv pip install tzdata ...):
     # Python Cloud Client Libraries: https://cloud.google.com/python/docs/reference    
 
 # 3. Update Google Cloud CLI components:
@@ -132,36 +136,148 @@ ruff check gcp-services.py
 # 8. Hit Ctrl-C to exit CLI session.
 """
 
-#### Built-in imports (alphabetically):
+#### SECTION 02: Capture pgm start date/time from the earliest point:
 
 # ruff: noqa: E402 Module level import not at top of file
-import time
+# See https://bomonike.github.io/python-samples/#StartingTime
+# Built-in libraries (no pip/conda install needed):
+from datetime import datetime  # , timezone
+import time  # for timestamp
+#from time import perf_counter_ns
 std_strt_timestamp = time.monotonic()
+#from zoneinfo import ZoneInfo  # For Python 3.9+ https://docs.python.org/3/library/zoneinfo.html 
+
+# To display wall clock date & time of program start:
+# pgm_strt_datetimestamp = datetime.now() has been deprecated.
+pgm_strt_timestamp = time.monotonic()
+
+# TODO: Display Z (UTC/GMT) instead of local time
+pgm_strt_epoch_timestamp = time.time()
+pgm_strt_local_timestamp = time.localtime()
+# NOTE: Can't display the dates until formatting code is run below
+
+
+#### Built-in imports (alphabetically):
+
 import argparse
+# import base64       # UNUSED? from myutils
 # import collections  # F401 not used
 import configparser
-import datetime    # removed to avoid conflict with myutils import
+#import datetime    # removed to avoid conflict with myutils import
 import functools
-import importlib.util
-# import inspect
-# import itertools
+#import importlib.util   # unused
+#import inspect
+#import itertools
 import json
 import logging
 import os
-from pathlib import Path
+from pathlib import Path   # for older Python 3.4+
 import pickle         
-import pip
+# import pip
 #import platform     # https://docs.python.org/3/library/platform.html
 import random
-import requests
+import requests     # not module named requests
 from requests.exceptions import RequestException
-#import string
-import subprocess
+import string
+import subprocess   # for CLI commands.
 import sys
+import traceback
+import pip
 #import webbrowser
 std_stop_timestamp = time.monotonic()
 
 #### External imports:
+
+# Import datetime first to ensure it's properly initialized
+# from datetime import datetime, timezone
+
+xpt_strt_datetimestamp = time.monotonic()   # For wall time of xpt imports
+try:
+    # External: No known vulnerabilities were found by: pip-audit -r requirements.txt
+    # See https://realpython.com/python39-new-features/#proper-time-zone-support
+    import google.auth    # for google.auth.default()
+    # UNUSED: from google.auth import identity_pool
+    from google.auth import default, credentials
+    from googleapiclient.discovery import build              # uv pip install google-api-python-client
+        # service = build('calendar', 'v3', credentials=credentials, cache_discovery=False)
+        # See https://www.perplexity.ai/search/googleapiclient-discovery-cach-ll78_HWfRCm64biN3HJd_A#0
+    #from google.cloud.iam_v1 import WorkloadIdentityPoolsClient  # uv pip install google-cloud-iam
+
+    # Google reorganized their IAM client libraries, and Workload Identity Pool is now in the iam_v1 module rather than iam_admin_v1:
+    # NOT: from google.cloud import iam_v1   # uv pip install google-cloud-iam
+    #from google.cloud.iam_admin_v1 import IAMClient  # For general IAM operations
+    # from google.cloud import iam_admin_v1 # NOT iam_v1  uv pip install google-cloud-iam
+        # For client = iam_admin_v1.IAMClient()
+        # See https://pypi.org/project/google-cloud-iam/
+        # And https://cloud.google.com/python/docs/reference/iam/latest/google.cloud.iam_admin_v1.services.iam.IAMClient
+                    # uv pip install google-api-python-client  # General Google APIs
+                    # uv pip install googleapis-common-protos  # Common protocol buffers
+
+    #from google.iam.v1 import iam_policy_pb2     # uv pip install grpc-google-iam-v1
+    #from google.iam.v1 import iam_policy_pb2_grpc
+
+    # For new releases: google.cloud has been deprecated:
+    from google.cloud import resourcemanager_v3  # uv pip install google-cloud-resource-manager
+    # from google.auth.exceptions import DefaultCredentialsError   # unused here?
+    from google.auth.transport.requests import Request       # google-auth-httplib2
+        # consider using `importlib.util.find_spec` to test for availability
+    from google_auth_oauthlib.flow import InstalledAppFlow   # google-auth-oauthlib
+    from google.auth.credentials import Credentials  # to automatically detect and use ADC credentials
+    #from google.auth import identity_pool
+
+    from google.oauth2 import service_account  # to check svc acct exists   # uv pip install google-auth
+    from googleapiclient.errors import HttpError
+
+    #from google.oauth2.credentials import Credentials   # used here?
+    
+    # UNUSED: from googleapiclient import discovery    # uv pip install google-api-python-client
+        # for: service = discovery.build('iam', 'v1')
+
+    # To enable the Cloud Resource Manager API for your project:
+    # https://cloud.google.com/resource-manager/docs/quickstart
+    from google.cloud import service_usage_v1    # uv pip install google-cloud-service-usage
+
+    from google.cloud import bigquery       # uv pip install google-cloud-bigquery
+    from google.cloud import compute_v1     # uv pip install google-cloud-compute
+    #from google.cloud import core          # uv pip install google-cloud-core
+    # google-cloud-firestore 
+    from google.cloud import pubsub_v1      # uv pip install google-cloud-pubsub
+    from google.cloud import secretmanager  # uv pip install google-cloud-secret-manager
+    from google.cloud import storage        # uv pip install google-cloud-core
+
+    # import matplotlib.pyplot as plt        # statsd
+    #from numpy import numpy as np             # doesn't play well with others?
+    #from cryptography.fernet import Fernet    # in myutils
+    import statsd
+    #from statsd import StatsClient    # uv pip install python-statsd or statsd
+    import tabulate       # uv pip install tabulate
+    from typing import Callable, Optional, Type, Union, List, Dict, Any
+    import pandas as pd   # uv pip install pandas
+    # from zoneinfo import ZoneInfo   # python -m uv pip install tzdata
+        # ZoneInfo from IANA is now the most authoritative source for time zones.
+    #import uuid
+except ImportError as _:
+    print(traceback.format_exc(), end='')
+    sys.exit(4)
+except Exception as e:
+    print(f"import exception: {e}")
+    #print("    sys.prefix      = ", sys.prefix)
+    #print("    sys.base_prefix = ", sys.base_prefix)
+    print("Please activate your virtual environment:\n  python3 -m venv venv && source venv/bin/activate")
+    print("  uv pip install --upgrade -r requirements.txt")
+    exit(9)
+
+# FIXME: ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+# google-cloud-aiplatform 1.92.0 requires google-cloud-storage<3.0.0,>=1.32.0, but you have 
+# google-cloud-storage 3.1.0 which is incompatible.
+# google-adk 0.5.0 requires google-cloud-storage<3.0.0,>=2.18.0, but you have 
+# google-cloud-storage 3.1.0 which is incompatible.
+
+# For wall time of xpt imports:
+xpt_stop_datetimestamp = time.monotonic()
+
+
+#### Local imports:
 
 # Enable import of local module (myutils)
 sys.path.append(os.getcwd())  # Returns None
@@ -180,72 +296,6 @@ for module in ['myutils', 'datetime']:
     if module in sys.modules:
         del sys.modules[module]
 
-# Import datetime first to ensure it's properly initialized
-# from datetime import datetime, timezone
-
-xpt_strt_datetimestamp = time.monotonic()   # For wall time of xpt imports
-try:
-    # External: No known vulnerabilities were found by: pip-audit -r requirements.txt
-    # See https://realpython.com/python39-new-features/#proper-time-zone-support
-    import google.auth
-    from google.auth import default, identity_pool, credentials
-    from google.auth.exceptions import DefaultCredentialsError
-    from google.auth.transport.requests import Request       # google-auth-httplib2
-    from google_auth_oauthlib.flow import InstalledAppFlow   # google-auth-oauthlib
-    from google.auth.credentials import Credentials  # to automatically detect and use ADC credentials
-    from google.auth import identity_pool
-    from google.oauth2 import service_account                # pip install google-auth
-    from google.oauth2.credentials import Credentials
-    
-    from googleapiclient.discovery import build              # pip install google-api-python-client
-    from googleapiclient.errors import HttpError
-    
-    # To enable the Cloud Resource Manager API for your project:
-    # https://cloud.google.com/resource-manager/docs/quickstart
-    from google.cloud import service_usage_v1    # pip install google-cloud-service-usage
-    #from google.cloud import service_usage_v1     # pip install google-cloud-service-usage
-
-    from google.cloud import bigquery       # pip install google-cloud-bigquery
-    from google.cloud import compute_v1     # pip install google-cloud-compute
-    #from google.cloud import core          # pip install google-cloud-core
-    # google-cloud-firestore 
-    from google.cloud import pubsub_v1      # pip install google-cloud-pubsub
-    from google.cloud import secretmanager  # pip install google-cloud-secret-manager
-    from google.cloud import storage        # pip install google-cloud-core
-
-    #from google.cloud import iam_v1             # pip install google-cloud-iam
-    from google.cloud import iam                 # pip install google-cloud-iam
-    from google.cloud import resourcemanager_v3  # pip install google-cloud-resource-manager 
-    #from google.cloud.iam_v1 import IAMClient
-                            # pip install google-api-python-client  # General Google APIs
-                            # pip install googleapis-common-protos  # Common protocol buffers
-    # import matplotlib.pyplot as plt        # statsd
-    # from numpy import numpy as np
-    from cryptography.fernet import Fernet
-    import statsd
-    #from statsd import StatsClient    # pip install python-statsd or statsd
-    import tabulate       # pip install tabulate
-    from typing import Callable, Optional, Type, Union, List, Dict, Any
-    import pandas as pd   # pip install pandas
-    # from zoneinfo import ZoneInfo   # python -m pip install tzdata
-        # ZoneInfo from IANA is now the most authoritative source for time zones.
-    #import uuid
-except Exception as e:
-    print(f"Python module import failed: {e}")
-    #print("    sys.prefix      = ", sys.prefix)
-    #print("    sys.base_prefix = ", sys.base_prefix)
-    print("Please activate your virtual environment:\n  python3 -m venv venv && source venv/bin/activate")
-    print("  pip install --upgrade -r requirements.txt")
-    exit(9)
-
-# FIXME: ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
-# google-cloud-aiplatform 1.92.0 requires google-cloud-storage<3.0.0,>=1.32.0, but you have 
-# google-cloud-storage 3.1.0 which is incompatible.
-# google-adk 0.5.0 requires google-cloud-storage<3.0.0,>=2.18.0, but you have 
-# google-cloud-storage 3.1.0 which is incompatible.
-
-# For wall time of xpt imports:
-xpt_stop_datetimestamp = time.monotonic()
 
 #### Global CLI parameters:
 
@@ -266,25 +316,33 @@ parser.add_argument("--format", "-fmt", choices=["table", "csv", "json"],
 # Load arguments from CLI:
 args = parser.parse_args()
 
+SHOW_QUIET = args.quiet
 SHOW_DEBUG = args.debug
 SHOW_VERBOSE = args.verbose
 SHOW_FUNCTIONS = False
 LIST_REGIONS = False
 LIST_GCS = True
 
-#### Global variables:
-
 my_account = args.user
 my_service_account = args.service_account
 
-parent_org_id = "123456789"  # Your organization ID
-parent_folder_id = "folders/123456789"  # Your folder ID 
+parent_org_id = None  # like "123456789"
+parent_folder_id = None  # like "folders/123456789" 
 my_project_id = args.project
-my_project_number = None
+my_project_number = None  # looked up from project ID
 
 output_format = args.format
 
+my_home_dir = str(Path.home())  # such as "/Users/johndoe"
+# ADC first checks the environment variable GOOGLE_APPLICATION_CREDENTIALS, then:
+my_adc_path = f"{str(Path.home())}/Users/johndoe/.google_credentials/credentials.json"
+    # Windows	%APPDATA%\gcloud\application_default_credentials.json
+    # json contains account, client_id, client_secret, quota_project_id, refresh_token, type, universe_domain.
+# print(f"my_adc_path={my_adc_path}")
+
+
 #### DEBUG:
+
 
 if SHOW_DEBUG:
     myutils.show_print_samples()
@@ -307,7 +365,7 @@ if SHOW_DEBUG:
         timestamp = datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
         myutils.print_trace(f"File last modified: {timestamp} ")
 
-    dunder_items = myutils.extract_dunder_variables(THIS_PGM)
+    dunder_items = myutils._extract_dunder_variables(THIS_PGM)
     for i, (key, value) in enumerate(dunder_items.items(), 1):
         myutils.print_trace(f"{key}: {value}")   # without {i}. 
 
@@ -488,6 +546,130 @@ def authenticate_with_adc():
         return None, None
 
 
+def get_provider_pool_id(project_id, location="global") -> (str, str):
+    """
+    Return created my_pool_id for use with Workload Identity Federation.
+    The provider point to GitHub's OIDC issuer: and include the necessary attribute mapping.
+    """
+    if not project_id:
+        return None
+    if not location:
+        location = "global"
+
+    #yymmddhhmm = myutils.get_user_local_timestamp('yymmddhhmm')
+    provider_id = "prov-{location}-{yymmddhhmm}"
+    pool_id = f"pool-{location}-{yymmddhhmm}"
+    # provider_ids are 1-32 characters, lowercase letters, numbers, and hyphens only:
+    max_chars = 32
+    if len(project_id) > max_chars:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): pool_id: \"{pool_id}\" > {max_chars} chars!")
+        exit()
+
+    pool_display_name="GitHub Actions Pool",
+    pool_description="Pool for GitHub Actions OIDC"
+
+    try:
+        # The provider point to GitHub's OIDC issuer at
+        # https://token.actions.githubusercontent.com
+        # and include the necessary attribute mapping.
+
+        # Initialize the IAM client:
+        from google.cloud import iam_admin_v1  # not iam_v1
+        client = iam_admin_v1.IAMClient()
+            # NOT client = iam_admin_v1.IAMClient()
+            # NOT client = iam_v1.WorkloadIdentityPoolsClient()
+
+    except Exception as e:
+        myutils.print_error(f"get_provider_pool_id(): client: {e}")
+            # FIXME: get_provider_pool_id(): name 'iam_v1' is not defined 
+        #return None, None
+
+    try:
+
+        # Create workload identity pool
+        request = iam_admin_v1.CreateWorkloadIdentityPoolRequest(
+            parent=f"projects/{project_id}/locations/global",
+            workload_identity_pool=iam_admin_v1.WorkloadIdentityPool(
+                display_name="My Pool",
+                description="Description of the pool",
+                disabled=False
+            ),
+            workload_identity_pool_id="my-pool-id"
+        )
+    except Exception as e:
+        myutils.print_error(f"get_provider_pool_id(): request: {e}")
+            # FIXME: cannot access local variable 'client' where it is not associated with a value 
+        # return None, None
+
+    try:
+
+        response = client.create_workload_identity_pool(request=request)
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): response{response}")
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+            # FIXME: cannot access local variable 'client' where it is not associated with a value 
+        # return None, None
+
+    try:
+        #pool = iam_v1.WorkloadIdentityPool(
+        pool = iam_admin_v1.IAMClient(
+            display_name=pool_display_name,
+            description=pool_description
+        )
+    except Exception as e:
+        myutils.print_error(f"get_provider_pool_id(): response: {e}")
+            # FIXME: cannot access local variable 'client' where it is not associated with a value 
+        # return None, None
+
+    try:
+        myutils.print_verbose(f"pool: \"{pool}\" ")
+
+        parent = f"projects/{project_id}/locations/{location}"
+        myutils.print_verbose(f"parent: \"{parent}\" ")
+        operation = client.create_workload_identity_pool(
+            parent=parent,
+            workload_identity_pool=pool,
+            workload_identity_pool_id=pool_id
+        )
+    except Exception as e:
+        myutils.print_error(f"get_provider_pool_id(): operation: {e}")
+        # return None, None
+
+    try:
+        pool_result = operation.result()
+        myutils.print_verbose(f"Created pool: \"{pool_result.name}\" ")
+        # 2. Create the OIDC Provider for GitHub:
+        provider_client = iam_admin_v1.IAMClient()
+            # iam_v1.WorkloadIdentityPoolProvidersClient()
+        provider_parent = f"{parent}/workloadIdentityPools/{pool_id}"
+        provider = iam_admin_v1.IAMClient(
+            # iam_v1.WorkloadIdentityPoolProvider(
+            display_name="GitHub Provider",
+            description="OIDC provider for GitHub Actions",
+            oidc=iam_admin_v1.WorkloadIdentityPoolProvider.Oidc(
+                issuer_uri="https://token.actions.githubusercontent.com"
+            ),
+            attribute_mapping={
+                "google.subject": "assertion.sub",
+                "attribute.actor": "assertion.actor",
+                "attribute.repository": "assertion.repository",
+                "attribute.repository_owner": "assertion.repository_owner"
+            }
+        )
+        provider_op = provider_client.create_workload_identity_pool_provider(
+            parent=provider_parent,
+            workload_identity_pool_provider=provider,
+            workload_identity_pool_provider_id=provider_id
+        )
+        provider_result = provider_op.result()
+        myutils.print_info(f"Provider ID: \"{provider_result.name}\" ")
+        myutils.print_info(f"Pool ID \"{pool_id}\" as \"{pool_result.name}\" from get_pool_id() ")
+        return provider_id, pool_id
+    except Exception as e:
+        myutils.print_error(f"get_provider_pool_id(): last: {e}")
+        return None, None
+
+
 def get_account_id() -> str:
     """Obtain account_id 3 different ways based on overrides:
     1) command line argument parm, 2) from gcloud cli, 3) .env file GOOGLE_account_id, 4) prompt for it
@@ -501,7 +683,7 @@ def get_account_id() -> str:
     # WAY 2: Read from Google local INI-format config file set by gcloud init CLI command:
     # On macOS:
     filepath = os.path.expanduser('~/.config/gcloud/configurations/config_default')
-    print(f"my_google_config_filepath = \"{filepath}\" ")
+    myutils.print_verbose(f"my_google_config_filepath = \"{filepath}\" ")
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Config file at \"{filepath}\" not found within get_account_id()")
     try:
@@ -521,7 +703,7 @@ def get_account_id() -> str:
         if key not in config[section]:
             raise KeyError(f"Key '{key}' not found in section '{section}'")
 
-        print(f"My current account: \"{config[section][key]}\" within get_account_id() ")
+        myutils.print_verbose(f"My current account: \"{config[section][key]}\" within get_account_id() ")
         return config[section][key]
 
         #with open(my_google_config_filepath, 'r') as f:
@@ -529,7 +711,7 @@ def get_account_id() -> str:
         #    if account:
         #        return account
     except Exception as e:
-        print(f"get_account_id() {e}", file=sys.stderr)
+        print(f"{sys._getframe().f_code.co_name}() {e}", file=sys.stderr)
         exit(9)
     
     # WAY 3: Read from .env file:
@@ -621,49 +803,7 @@ def authenticate_with_user_account(account_in) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"❌ Authentication failed: {e}")
-        raise
-
-
-def authenticate_with_service_account(key_path: str) -> Dict[str, Any]:
-    """
-    Authenticate using a service account key file.
-    Args:
-        key_path: Path to the service account JSON key file
-    Returns:
-        Dict containing credentials info and authenticated client
-    """
-    try:
-        #from google.cloud import storage
-        # Set environment variable for other libraries to use
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
-           # such as GOOGLE_APPLICATION_CREDENTIALS="/Users/johndoe/.google_credentials/credentials.json"
-        
-        # Create credentials object:
-        #from google.oauth2 import service_account
-        credentials = service_account.Credentials.from_service_account_file(
-            filename=key_path,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-        
-        # Create an authenticated client (using storage as an example)
-        client = storage.Client(credentials=credentials)
-        
-        # Get service account details
-        with open(key_path, 'r') as key_file:
-            key_data = json.load(key_file)
-        
-        print(f"✅ Successfully authenticated as: {key_data.get('client_email', 'Unknown')}")
-        
-        return {
-            "credentials": credentials,
-            "client": client,
-            "project_id": key_data.get('project_id'),
-            "client_email": key_data.get('client_email')
-        }
-        
-    except Exception as e:
-        print(f"❌ Authentication failed: {e}")
+        print(f"{sys._getframe().f_code.co_name}(): {e}")
         raise
 
 
@@ -686,9 +826,7 @@ def authenticate_with_application_default() -> Dict[str, Any]:
         # Create an authenticated client (using storage as an example)
         client = storage.Client(credentials=credentials, project=project_id)
         
-        print("✅ Successfully authenticated with Application Default Credentials")
-        print(f"   Project ID: {project_id}")
-        
+        myutils.print_verbose(f"Project ID: \"{project_id}\" authenticated with Application Default Credentials")        
         return {
             "credentials": credentials,
             "client": client,
@@ -700,36 +838,33 @@ def authenticate_with_application_default() -> Dict[str, Any]:
         raise
 
 
-def get_adc_project_id() -> str:
+def get_adc_project_id(adc_path: str) -> str:
     """
     Returns the project ID string from the ADC file, or None if not found.
     """
     # if CLI: "gcloud auth application-default login" was run to setup file:
-    home_dir = str(Path.home())
-    my_adc_path = f"{home_dir}/.config/gcloud/application_default_credentials.json"
-    if os.path.exists(my_adc_path):
-        print(f"ADC (Application Default Credentials) found at: {my_adc_path} within get_adc_project_id() ")
-        # TODO: read the file and print the contents: project_id, client_id, client_secret, refresh_token 
-        # {
-        #   "account": "",
-        #   "client_id": "...",
-        #   "client_secret": "...",
-        #   "quota_project_id": "weather-454da",
-        #   "refresh_token": "...M",
-        #   "type": "authorized_user",
-        #   "universe_domain": "googleapis.com"
-        # }
-        with open(my_adc_path, 'r') as file:
-            json_str = file.read()
-        # import json
-        json_data = json.loads(json_str)
-        project_id = json_data.get('quota_project_id')
-        print(f"project_id: \"{project_id}\" within get_adc_project_id() ")
-        return project_id
-    else:
-        print(f"❌ ADC project_id not found at path: {my_adc_path} within get_adc_project_id() ")
+
+    if not os.path.exists(adc_path):
+        myutils.print_error(f"ADC project_id not found at {my_adc_path} within get_adc_project_id() ")
         rc = setup_local_adc()
         return rc
+    
+    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): ADC found at: {adc_path}")
+    with open(adc_path, 'r') as file:
+        json_str = file.read()
+    # import json
+    json_data = json.loads(json_str)
+    project_id = json_data.get('quota_project_id')
+    # TODO: Expose other contents: client_id, client_secret, refresh_token 
+    myutils.print_trace(f"{sys._getframe().f_code.co_name}(): json_data: \"{json_data}\" ")
+
+    max_chars = 21
+    if len(project_id) > max_chars:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): project_id: \"{project_id}\" > {max_chars} chars!")
+        exit()    
+    
+    myutils.print_info(f"{sys._getframe().f_code.co_name}(): project_id: \"{project_id}\" within get_adc_project_id() ")
+    return project_id
 
 
 def generate_project_id(base_name, max_length=30):
@@ -750,6 +885,7 @@ def generate_project_id(base_name, max_length=30):
     clean_name = '-'.join(filter(None, clean_name.split('-')))
     
     # Add random suffix to ensure uniqueness
+    # import string
     suffix = ''.join(random.choices(string.digits, k=6))
     
     # Ensure it starts with a letter
@@ -759,11 +895,14 @@ def generate_project_id(base_name, max_length=30):
         clean_name = 'project'
     
     project_id = f"{clean_name}-{suffix}"
-    
+    max_chars = 21
+    if len(project_id) > max_chars:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): project_id: \"{project_id}\" > {max_chars} chars!")
+        exit()
     # Truncate if too long
-    if len(project_id) > max_length:
-        available_length = max_length - len(suffix) - 1  # -1 for dash
-        project_id = f"{clean_name[:available_length]}-{suffix}"
+    #if len(project_id) > max_length:
+    #    available_length = max_length - len(suffix) - 1  # -1 for dash
+    #    project_id = f"{clean_name[:available_length]}-{suffix}"
     
     return project_id
 
@@ -772,12 +911,13 @@ def get_project_number(project_id=None) -> tuple[str, str]:
     """Get 12-digit project number Google assigns for each user-defined alphanumeric project ID
     for use by some IAM policies, billing APIs.
     """
+    #import google.auth
     credentials, default_project = google.auth.default()
     
     if not project_id:
         project_id = default_project
     
-    #from google.cloud import resourcemanager_v3
+    #from google.cloud import resourcemanager_v3  (more recent than _v1)
     client = resourcemanager_v3.ProjectsClient(credentials=credentials)
     project_name = f"projects/{project_id}"  # example: 123456789012 (12 digits)
     
@@ -801,7 +941,6 @@ def create_gcp_project(project_name, project_id=None, parent_org_id=None, parent
     See https://cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy
     Diagram: https://res.cloudinary.com/dcajqrroq/image/upload/v1748376248/gcp-resc-arch-586x7782_fqmrun.jpg
     
-
     Args:
         project_name (str): Display name for the project
         project_id (str, optional): Project ID. If None, will be generated from project_name
@@ -851,13 +990,13 @@ def create_gcp_project(project_name, project_id=None, parent_org_id=None, parent
     try:
         # Create the project
         operation = client.create_project(project=project)
-        print(f"Project creation initiated. Operation name: {operation.name}")
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): Operation name: {operation.name}")
         
         # Wait for the operation to complete
-        print("Waiting for project creation to complete...")
+        #print("Waiting for project creation to complete...")
         result = operation.result(timeout=300)  # 5 minute timeout
         
-        print(f"✅ Project created successfully!")
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): Project created successfully!")
         print(f"Project ID: {result.project_id}")
         print(f"Project Number: {result.name.split('/')[-1]}")
         print(f"Display Name: {result.display_name}")
@@ -870,7 +1009,7 @@ def create_gcp_project(project_name, project_id=None, parent_org_id=None, parent
             'state': result.state.name
         }        
     except Exception as e:
-        print(f"❌ Error creating project: {str(e)}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
         raise
 
 
@@ -893,7 +1032,7 @@ def check_api_status(project_id) -> str:
         
         is_enabled = service.state == service_usage_v1.State.ENABLED
         status = "enabled" if is_enabled else "disabled"
-        print(f"project_id: \"{project_id}\" Cloud Resource Manager API is: {status}")
+        myutils.print_verbose(f"project_id: \"{project_id}\" Cloud Resource Manager API is: {status}")
         return is_enabled
         
     except Exception as e:
@@ -936,21 +1075,21 @@ def enable_cloud_resource_manager_api(project_id:str) -> bool:
         # Enable the service (this returns a long-running operation)
         operation = client.enable_service(request=request)
         
-        print("Waiting for operation to complete...")
+        # print("Waiting for operation to complete...")
         
         # Wait for the operation to complete
         result = operation.result(timeout=300)  # 5 minute timeout
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): result: \"{result}\" ")
         
-        print(f"✅ project_id \"{project_id}\" enabled for Cloud Resource Manager API ")
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): project_id: \"{project_id}\" enabled for Cloud Resource Manager API")
         return True
         
     except Exception as e:
-        print(f"❌ Error enabling Cloud Resource Manager API: {str(e)}")
+        myutils.print_error(f"Error enabling Cloud Resource Manager API: {str(e)}")
         return False
 
 
 # def add_tags_to_project(project_id:str, tags:dict) -> bool:
-
 
 
 def setup_local_adc() -> bool:
@@ -968,7 +1107,7 @@ def setup_local_adc() -> bool:
                           stdout=subprocess.PIPE, 
                           stderr=subprocess.PIPE)
         except (subprocess.SubprocessError, FileNotFoundError):
-            print("❌ gcloud CLI is not installed. Please install it from: https://cloud.google.com/sdk/docs/install")
+            myutils.print_fail(f"{sys._getframe().f_code.co_name}(): gcloud CLI is not installed. Please install it from: https://cloud.google.com/sdk/docs/install")
             return None
         
         # Run the gcloud auth login command:
@@ -988,610 +1127,330 @@ def setup_local_adc() -> bool:
             return False
             
     except Exception as e:
-        print(f"❌ Error setting up ADC: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error setting up ADC: {e}")
         return False
-
-
-#### Workload Identity Federation (WIF)
-
-
-def create_workload_identity_pool(
-    project_id: str,
-    pool_id: str,
-    display_name: str = None,
-    description: str = None,
-    disabled: bool = False,
-    credentials_path: str = None
-):
-    """
-    Create a Workload Identity Pool in GCP.
-    https://console.cloud.google.com/iam-admin/workload-identity-pools/create
-    Args:
-        project_id: GCP project ID
-        pool_id: Unique identifier for the pool
-        display_name: Human-readable name for the pool
-        description: Description of the pool
-        disabled: Whether the pool should be disabled
-        credentials_path: Path to service account key file (optional)
-    CLI:
-        gcloud iam workload-identity-pools create $POOL_ID \
-            --project=$PROJECT_ID \
-            --location="global" \
-            --display-name="$POOL_DISPLAY_NAME" \
-            --description="$POOL_DESCRIPTION"    
-    Returns:
-        The created WorkloadIdentityPool object ("my_github_pool_object")
-    """
-    
-    # Initialize the IAM client
-    if credentials_path:
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path
-        )
-        client = iam_admin_v1.WorkloadIdentityPoolsClient(credentials=credentials)
-    else:
-        # Use default credentials (e.g., from gcloud auth)
-        client = iam_admin_v1.WorkloadIdentityPoolsClient()
-    
-    # Construct the parent resource name
-    parent = f"projects/{project_id}/locations/global"
-    
-    # Create the WorkloadIdentityPool object
-    pool = iam_admin_v1.WorkloadIdentityPool(
-        display_name=display_name or f"Workload Identity Pool {pool_id}",
-        description=description or f"Workload Identity Pool for {project_id}",
-        disabled=disabled
-    )
-    
-    # Create the request
-    request = iam_admin_v1.CreateWorkloadIdentityPoolRequest(
-        parent=parent,
-        workload_identity_pool=pool,
-        workload_identity_pool_id=pool_id
-    )
-    
-    try:
-        # Create the pool
-        operation = client.create_workload_identity_pool(request=request)
-        print(f"Creating Workload Identity Pool: {pool_id}")
-        
-        # Wait for the operation to complete
-        result = operation.result()
-        
-        print(f"✅ Successfully created Workload Identity Pool:")
-        print(f"   Name: {result.name}")
-        print(f"   Display Name: {result.display_name}")
-        print(f"   State: {result.state}")
-        
-        return result
-        
-    except Exception as e:
-        print(f"❌ Error creating Workload Identity Pool: {e}")
-        raise
-
-
-def create_workload_identity_provider(
-    project_id: str,
-    pool_id: str,
-    provider_id: str,
-    issuer_uri: str,
-    audience: str = None,
-    display_name: str = None,
-    description: str = None,
-    attribute_mapping: dict = None,
-    attribute_condition: str = None,
-    credentials_path: str = None
-):
-    """
-    Create a Workload Identity Provider within a pool.
-    
-    Args:
-        project_id: GCP project ID
-        pool_id: ID of the existing workload identity pool
-        provider_id: Unique identifier for the provider
-        issuer_uri: The issuer URI (e.g., for GitHub Actions)
-        audience: The audience for the provider
-        display_name: Human-readable name for the provider
-        description: Description of the provider
-        attribute_mapping: Mapping of attributes from external identity to Google Cloud attributes
-        attribute_condition: Condition that must be met for authentication
-        credentials_path: Path to service account key file (optional)
-    CLI:
-        gcloud iam workload-identity-pools providers create-oidc $PROVIDER_ID \
-            --project=$PROJECT_ID \
-            --location="global" \
-            --workload-identity-pool=$POOL_ID \
-            --display-name="$PROVIDER_DISPLAY_NAME" \
-            --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
-            --issuer-uri="https://token.actions.githubusercontent.com"
-    Returns:
-        The created WorkloadIdentityPoolProvider object
-    Provider types: "Amazon Web Serivces (AWS)", "Microsoft Azure", "Open ID Connect (OIDC)", SAML.
-    """
-    
-    # Initialize the IAM client
-    if credentials_path:
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path
-        )
-        client = iam_admin_v1.WorkloadIdentityPoolsClient(credentials=credentials)
-    else:
-        client = iam_admin_v1.WorkloadIdentityPoolsClient()
-    
-    # Construct the parent resource name
-    parent = f"projects/{project_id}/locations/global/workloadIdentityPools/{pool_id}"
-    
-    # Default attribute mapping for GitHub Actions
-    if attribute_mapping is None:
-        attribute_mapping = {
-            "google.subject": "assertion.sub",
-            "attribute.actor": "assertion.actor",
-            "attribute.repository": "assertion.repository"
-        }
-    
-    # Create OIDC provider configuration
-    oidc = iam_admin_v1.Oidc(
-        issuer_uri=issuer_uri,
-        allowed_audiences=[audience] if audience else []
-    )
-    
-    # Create the WorkloadIdentityPoolProvider object
-    provider_object = iam_admin_v1.WorkloadIdentityPoolProvider(
-        display_name=display_name or f"Provider {provider_id}",
-        description=description or f"OIDC provider for {issuer_uri}",
-        attribute_mapping=attribute_mapping,
-        attribute_condition=attribute_condition,
-        oidc=oidc
-    )
-    request = iam_admin_v1.CreateWorkloadIdentityPoolProviderRequest(
-        parent=parent,
-        workload_identity_pool_provider=provider_object,
-        workload_identity_pool_provider_id=provider_id
-    )
-    
-    try:
-        # Create the provider
-        operation = client.create_workload_identity_pool_provider(request=request)
-        print(f"Creating Workload Identity Provider: {provider_id}")
-        
-        # Wait for the operation to complete:
-        result_obj = operation.result()
-        
-        print(f"✅ Successfully created Workload Identity Provider:")
-        print(f"   Provider Name: {result_obj.name}")
-        print(f"   Display Name: {result_obj.display_name}")
-        print(f"   Issuer URI: {result_obj.oidc.issuer_uri}")
-        
-        return result_obj
-        
-    except Exception as e:
-        print(f"❌ Error creating Workload Identity Provider: {e}")
-        raise
-
-
-def list_workload_identity_pools(project_id: str, credentials_path: str = None):
-    """List all Workload Identity Pools in a project.
-    """
-    
-    if credentials_path:
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path
-        )
-        client = iam_admin_v1.WorkloadIdentityPoolsClient(credentials=credentials)
-    else:
-        client = iam_admin_v1.WorkloadIdentityPoolsClient()
-    
-    parent = f"projects/{project_id}/locations/global"
-    
-    try:
-        pools = client.list_workload_identity_pools(parent=parent)
-        
-        print(f"Workload Identity Pools in project {project_id}:")
-        for pool in pools:
-            print(f"  - {pool.name}")
-            print(f"    Display Name: {pool.display_name}")
-            print(f"    State: {pool.state}")
-            print()
-            
-    except Exception as e:
-        print(f"❌ Error listing pools: {e}")
-
-
-def authenticate_with_workload_identity_federation():
-    """
-    Authenticate using Workload Identity Federation with dynamic external credentials, which is recommended 
-    instead of static long-lived service account credentials which can be compromised.
-    
-    This sample code shows multiple approaches:
-    https://google-auth.readthedocs.io/en/latest/reference/google.auth.identity_pool.html#module-google.auth.identity_pool
-    https://github.com/googleapis/google-auth-library-python
-    """
-    
-    # Method 1: Using credential configuration file
-    def auth_with_config_file():
-        """Authenticate using a credential configuration JSON file"""
-        
-        # Path to your credential configuration file
-        credential_source_file = "path/to/your/credential-config.json"
-        
-        # Load credentials from the configuration file
-        credentials = identity_pool.Credentials.from_file(credential_source_file)
-        
-        # Refresh credentials if needed
-        if not credentials.valid:
-            credentials.refresh(google.auth.transport.requests.Request())
-        
-        return credentials
-    
-    # Method 2: Using environment variables
-    def auth_with_env_vars():
-        """Authenticate using environment variables"""
-        
-        # Set these environment variables in your environment
-        # GOOGLE_APPLICATION_CREDENTIALS should point to your config file
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "path/to/credential-config.json"
-        
-        # Use default credentials (will automatically use WIF if configured)
-        credentials, project = google.auth.default()
-        
-        return credentials
-    
-    # Method 3: Programmatic configuration
-    def auth_programmatic():
-        """Create credentials programmatically
-        """
-        
-        # Audience string for your Workload Identity Pool contains PROJECT_NUMBER, POOL_ID, PROVIDER_ID:
-        audience = "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID"
-        subject_token_type = "urn:ietf:params:oauth:token-type:id_token"  # or jwt
-        token_url = "https://sts.googleapis.com/v1/token"
-        
-        # External credential source (example for file-based)
-        credential_source = {
-            "file": "path/to/external/token/file",
-            "format": {
-                "type": "text"  # or "json" with subject_token_field_name
-            }
-        }
-        
-        # Create credentials
-        credentials = identity_pool.Credentials(
-            audience=audience,
-            subject_token_type=subject_token_type,
-            token_url=token_url,
-            credential_source=credential_source,
-        )
-        
-        return credentials
-
-
-def create_credential_config_example():
-    """
-    Example of what your credential configuration file should look like.
-    Save this as a JSON file and reference it in your authentication.
-    """
-    
-    config = {
-        "type": "external_account",
-        "audience": "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID",
-        "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-        "token_url": "https://sts.googleapis.com/v1/token",
-        "credential_source": {
-            # For file-based source
-            "file": "/path/to/token/file",
-            "format": {
-                "type": "text"
-            }
-        },
-        # Optional: Service account impersonation
-        "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/SERVICE_ACCOUNT_EMAIL:generateAccessToken"
-    }
-    
-    return config
-
-
-class WorkloadIdentityFederationClient:
-    """Client for working with Workload Identity Federation
-    https://console.cloud.google.com/iam-admin/workload-identity-pools
-    """
-    
-    def __init__(self, credential_source_file: str):
-        """
-        Initialize WIF client
-        
-        Args:
-            credential_source_file: Path to the external credential configuration file
-        """
-        self.credential_source_file = credential_source_file
-        self.credentials = None
-    
-    def authenticate_with_external_credential(self) -> None:
-        """Authenticate using external credential configuration"""
-        try:
-            # Load the external credential configuration
-            self.credentials = identity_pool.Credentials.from_file(
-                self.credential_source_file,
-                scopes=['https://www.googleapis.com/auth/cloud-platform']
-            )
-            
-            # Refresh the credentials to get an access token
-            request = Request()
-            self.credentials.refresh(request)
-            
-            print("✅ Successfully authenticated with Workload Identity Federation")
-            print(f"Token expires at: {self.credentials.expiry}")
-            
-        except Exception as e:
-            print(f"❌ Authentication failed: {e}")
-            raise
-    
-
-    def test_gcs_access(self, bucket_name: str) -> None:
-        """Test access to Google Cloud Storage using WIF credentials"""
-        if not self.credentials:
-            raise ValueError("Must authenticate first")
-        
-        try:
-            client = storage.Client(credentials=self.credentials)
-            bucket = client.bucket(bucket_name)
-            
-            # List first 5 objects
-            blobs = list(bucket.list_blobs(max_results=5))
-            print(f"✅ Successfully accessed bucket '{bucket_name}'")
-            print(f"Found {len(blobs)} objects (showing first 5)")
-            
-            for blob in blobs:
-                print(f"  - {blob.name}")
-                
-        except Exception as e:
-            print(f"❌ GCS access failed: {e}")
-    
-    def get_access_token(self) -> Optional[str]:
-        """Get the current access token"""
-        if not self.credentials:
-            return None
-        return self.credentials.token
-
-
-def create_wif_credential_config(
-    project_id: str,
-    pool_id: str,
-    provider_id: str,
-    service_account_email: str,
-    audience: str,
-    subject_token_type: str,
-    token_url: str,
-    credential_source: Dict
-) -> Dict:
-    """
-    Create a Workload Identity Federation credential configuration
-    
-    Args:
-        project_id: GCP project ID
-        pool_id: Workload identity pool ID
-        provider_id: Workload identity provider ID
-        service_account_email: Target service account email
-        audience: Audience for the identity pool
-        subject_token_type: Type of subject token (e.g., 'urn:ietf:params:oauth:token-type:jwt')
-        token_url: STS token exchange URL
-        credential_source: Configuration for obtaining the external credential
-    
-    Returns:
-        Dictionary containing the credential configuration
-    """
-    return {
-        "type": "external_account",
-        "audience": audience,
-        "subject_token_type": subject_token_type,
-        "token_url": token_url,
-        "credential_source": credential_source,
-        "service_account_impersonation_url": f"https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{service_account_email}:generateAccessToken"
-    }
-
-def create_github_actions_config(
-    project_id: str,
-    pool_id: str,
-    provider_id: str,
-    service_account_email: str,
-    repo: str
-) -> Dict:
-    """
-    Create configuration for GitHub Actions Workload Identity Federation
-    
-    Args:
-        project_id: GCP project ID
-        pool_id: Workload identity pool ID
-        provider_id: Workload identity provider ID
-        service_account_email: Service account to impersonate
-        repo: GitHub repository (format: owner/repo)
-    
-    Returns:
-        Credential configuration for GitHub Actions
-    """
-    audience = f"//iam.googleapis.com/projects/{project_id}/locations/global/workloadIdentityPools/{pool_id}/providers/{provider_id}"
-    
-    return create_wif_credential_config(
-        project_id=project_id,
-        pool_id=pool_id,
-        provider_id=provider_id,
-        service_account_email=service_account_email,
-        audience=audience,
-        subject_token_type="urn:ietf:params:oauth:token-type:jwt",
-        token_url="https://sts.googleapis.com/v1/token",
-        credential_source={
-            "environment_id": "github",
-            "regional_cred_verification_url": "https://sts.{region}.googleapis.com/v1/token",
-            "url": f"https://token.actions.githubusercontent.com?audience=//iam.googleapis.com/projects/{project_id}/locations/global/workloadIdentityPools/{pool_id}/providers/{provider_id}",
-            "format": {
-                "type": "json",
-                "subject_token_field_name": "value"
-            }
-        }
-    )
-
-
-def refresh_credentials(credentials):
-    """Helper function to extend expired credentials
-    """
-    # from google.auth.transport.requests import Request
-    if not credentials.valid:
-        if credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
-        else:
-            raise Exception("Unable to refresh credentials")
-            return None
-    return credentials
 
 
 ### GCP Service account
 
 
-def create_service_account():
+# Service account keys access data that belongs to an application, which includes
+# a Google Workspace or Cloud Identity users through domain-wide delegation.
+# CAUTION: Service account keys are not the same as service account credentials?
+# CAUTION: When an app authenticates as a service account, the app obtains
+# access to ALL resources the service account has permission to access.
+# https://developers.google.com/zero-touch/guides/customer/quickstart/python-service-account
+
+def check_svc_acct_exists(project_id: str = None, svc_acct_email: str = None):
     """
+    Returns True if the service account provided exists.
+    """
+    myutils.print_trace(f"{sys._getframe().f_code.co_name}(): project_id: \"{project_id}\" ")
+    # Example usage:
+    #project_id = 'your-gcp-project-id'
+    #svc_acct_email = 'my-service-account@your-gcp-project-id.iam.gserviceaccount.com'
+    if not svc_acct_email:
+        svc_acct_email = f"svc-{my_project_id}-{yymmddhhmm}"  # length between 6 and 30.
+        myutils.print_trace(f"svc_acct_email constructed: \"{svc_acct_email}\" ")
+    max_chars = 30
+    if len(svc_acct_email) > max_chars:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): svc_acct_email: \"{svc_acct_email}\" > {max_chars} chars!")
+        exit()
+
+    if not project_id:
+        # TODO: Retrieve current project_id between "svc-" and "-"
+        myutils.print_trace(f"project_id constructed: \"{project_id}\" ")
+
+    credentials_path = get_svc_credentials_path(svc_acct_email)
+
+    # pip install google-api-python-client google-auth
+    #from google.oauth2 import service_account
+    #rom googleapiclient.errors import HttpError
+    try:
+        credentials = service_account.Credentials.from_service_account_file(credentials_path)
+        #from googleapiclient.discovery import build
+        service = build('iam', 'v1', credentials=credentials)
+        name = f'projects/{project_id}/serviceAccounts/{svc_acct_email}'
+        try:
+            service.projects().serviceAccounts().get(name=name).execute()
+            return True  # Service account exists
+        except HttpError as e:
+            if e.resp.status == 404:
+                return False  # Service account does not exist
+            else:
+                raise  # Other errors
+
+        myutils.print_info(f"Service account: {svc_acct_email} exists!")
+        return True
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        # [Errno 2] No such file or directory: '/Users/.../.google_credentials/svc-....json' 
+        return False
+
+
+def create_svc_acct_email(project_id: str = None, svc_acct_email: str = None, display_name: str = None):
+    """
+    Returns my_svc_cred_path (path to JSON-formatted credentials file).
+    This is done one time for each service account id.
+    Usage: 
+        my_svc_cred_path = (my_project_id, my_svc_acct_email, display_name)
+    Args:
+        project_id: GCP project ID
+        svc_acct_email: Unique identifier like 'my-service-account@your-project-id.iam.gserviceaccount.com'
+        display_name: Human-readable name for the service account
     CLI:
         gcloud iam service-accounts create $SA_NAME \
             --project=$PROJECT_ID \
             --display-name="$SA_DISPLAY_NAME" \
             --description="Service account for workload identity federation"    
-    """
     print(f"- Service Account: $SA_NAME@$PROJECT_ID.iam.gserviceaccount.com")
-    return None
-
-def bind_svc_acct_to_wif_pool():
     """
-    Bind the service account to the workload identity pool to
-    enable external workloads to impersonate the service account.
-    CLI:
-        gcloud iam service-accounts add-iam-policy-binding \
-            --project=$PROJECT_ID \
-            --role="roles/iam.workloadIdentityUser" \
-            --member="principalSet://iam.googleapis.com/projects/$(gcloud config get-value project)/locations/global/workloadIdentityPools/$POOL_ID/attribute.repository/your-org/your-repo" \
-            $SA_NAME@$PROJECT_ID.iam.gserviceaccount.com
-
-    your-org/your-repo = bomonike/google
-    Attribute Condition: attribute.repository_owner=='your-org'
-    """
-    return None
-
-def get_full_provider_resc_name():
-    """
-    Get the full resource name of the provider (for external configuration)
-    CLI:
-        gcloud iam workload-identity-pools providers describe $PROVIDER_ID \
-            --project=$PROJECT_ID \
-            --location="global" \
-            --workload-identity-pool=$POOL_ID \
-            --format="value(name)"
-    """
-    # Now Update your external workload configuration with the provider resource name"
-    return None
-
-
-### AWS
-
-
-def authenticate_from_aws():
-    """
-    Example for authenticating from AWS using Workload Identity Federation
-    """
+    # TODO: If specified in CLI args, return
+    # TODO: If GOOGLE_SVC_ACCT_EMAIL specified in .env, return 
+    if not project_id:
+        project_id = my_project_id
+        myutils.print_trace(f"Global my_project_id: \"{project_id}\" ")
+    if not svc_acct_email:
+        svc_acct_email = f"svc-{my_project_id}-{yymmddhhmm}"  # length between 6 and 30.
+        myutils.print_trace(f"svc_acct_email constructed: \"{svc_acct_email}\" ")
+    max_chars = 30
+    if len(svc_acct_email) > max_chars:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): svc_acct_email: \"{svc_acct_email}\" > {max_chars} chars!")
+        exit()    
     
-    config = {
-        "type": "external_account",
-        "audience": "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID",
-        "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-        "token_url": "https://sts.googleapis.com/v1/token",
-        "credential_source": {
-            "environment_id": "aws1",
-            "regional_cred_verification_url": "https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15",
-            "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials",
-            "format": {
-                "type": "json",
-                "subject_token_field_name": "access_token"
+    if not display_name:
+        display_name = svc_acct_email + "-name"   #.iam.gserviceaccount.com"
+        myutils.print_trace(f"display_name constructed: \"{display_name}\" ")
+    
+    exists = check_svc_acct_exists(project_id, svc_acct_email)
+    if exists:
+        myutils.print_verbose(f"Service account: \"{svc_acct_email}\" already created.")
+        return True
+        # Manually view Service Accounts using GUI Chrome browser at:
+        # https://console.cloud.google.com/iam-admin/serviceaccounts
+
+    try:
+        #import requests
+        #from google.auth import default
+        # Get credentials and JWT access token:
+        credentials, _ = default(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+        #from google.auth.transport.requests import Request
+        credentials.refresh(Request())
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): credentials: {e}")
+
+    try:
+        access_token = credentials.token  # such as "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        myutils.print_trace(f"{sys._getframe().f_code.co_name}(): access_token: {len(access_token)} chars ")
+        myutils.print_secret(f"{access_token}")
+        url = f'https://iam.googleapis.com/v1/projects/{project_id}/serviceAccounts'
+        headers = {
+            'Authorization': f"Bearer {access_token}",
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'accountId': svc_acct_email,
+            'serviceAccount': {
+                'displayName': display_name
             }
         }
-    }
-    
-    # Save config to file and use it
-    with open("aws-wif-config.json", "w") as f:
-        json.dump(config, f, indent=2)
-    
-    credentials = identity_pool.Credentials.from_file("aws-wif-config.json")
-    return credentials
+        response = requests.post(url, headers=headers, json=data)
+        key_data = response.json()
+        myutils.print_trace(f"{sys._getframe().f_code.co_name}(): {key_data}")
+            # The beginning of credential.json file for service account:
+            # {'name': 'projects/sdk83360/serviceAccounts/svc-sdk83360-2506051513@sdk83360.iam.gserviceaccount.com', 
+            # 'projectId': 'sdk83360', 
+            # 'uniqueId': '123456749012345678901',  [21 chars]
+            # 'email': 'svc-sdk83360-2506051513@sdk83360.iam.gserviceaccount.com', 
+            # 'displayName': 'svc-sdk83360-2506051513-name', 
+            # 'etag': 'MDEwMjE5MjA=', 
+            # 'oauth2ClientId': '104640841729869098164'} 
+        return key_data
+
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return None
 
 
-def create_aws_config(
-    project_id: str,
-    pool_id: str,
-    provider_id: str,
-    service_account_email: str,
-    aws_region: str = "us-east-1"
-) -> Dict:
+def get_svc_credentials_path(svc_acct_email) -> str:
+    """This utility function returns the full file path to a service account credentials file
+    GCP uses to authenticate without human interaction.
+    Use of this function standardizes the path so it would be easier to change system-wide.
     """
-    Create configuration for AWS Workload Identity Federation
-    
+    # TODO: Retrieve from .env file variable GOOGLE_CREDENTIALS_PATH="~/.google_credentials"
+    # if not GOOGLE_CREDENTIALS_PATH_PREFIX:
+       #GOOGLE_CREDENTIALS_PATH_PREFIX = f"{str(Path.home())}/.google_credentials"
+
+    credentials_path = f"{str(Path.home())}/.google_credentials"   # the private key never in GitHub
+    myutils.print_trace(f"{sys._getframe().f_code.co_name}(): credentials_path: \"{credentials_path}\" ")
+    if not svc_acct_email:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): svc_acct_email is required")
+        return None
+    else:
+        svc_acct_credentials_path = f"{credentials_path}/{svc_acct_email}.json"  # the private key never in GitHub
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): svc_acct_credentials_path: \"{svc_acct_credentials_path}\" ")
+        # like "/Users/johndoe/.google_credentials/svc-sdk83360-2506050022@sdk83360.iam.gserviceaccount.com.json"
+        return svc_acct_credentials_path
+
+def get_svc_acct_key_path(svc_acct_email) -> str:
+    """This utility function returns the full file path to the  
+    private key .pem file needed to access the associated service account
+    as global variable my_svc_acct_key_path.
+
+    Args: The service account's long svc email address arg. 
+    global my_svc_acct_email is used to create a folder
+    like "/Users/johndoe/.google_credentials/svc-sdk83360.../private_key.pem"
+    Use of this function standardizes the path so it would be easier to change system-wide:
+    """
+    if not svc_acct_email:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): svc_acct_email is required")
+        return None
+    else:
+        key_path = f"{str(Path.home())}/.google_credentials/{svc_acct_email}"
+           # WARNING: The private key is never exposed to GitHub
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): \"{key_path}\" ")
+        # like "/Users/johndoe/.google_credentials/svc-sdk83360-2506050022@sdk83360.iam.gserviceaccount.com/private_key.pem"
+        return key_path
+
+
+def save_svc_acct_credentials_path(credentials: str, filepath: str) -> bool:
+    """
+    Save credentials dictionary to a JSON file.
     Args:
-        project_id: GCP project ID
-        pool_id: Workload identity pool ID
-        provider_id: Workload identity provider ID
-        service_account_email: Service account to impersonate
-        aws_region: AWS region
-    
-    Returns:
-        Credential configuration for AWS
+        credentials: Dictionary of credentials
+        filename: Name of the file to save the credentials to
     """
-    audience = f"//iam.googleapis.com/projects/{project_id}/locations/global/workloadIdentityPools/{pool_id}/providers/{provider_id}"
-    
-    return create_wif_credential_config(
-        project_id=project_id,
-        pool_id=pool_id,
-        provider_id=provider_id,
-        service_account_email=service_account_email,
-        audience=audience,
-        subject_token_type="urn:ietf:params:aws:token-type:aws4_request",
-        token_url="https://sts.googleapis.com/v1/token",
-        credential_source={
-            "environment_id": "aws1",
-            "regional_cred_verification_url": f"https://sts.{aws_region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15",
-            "region_url": "http://169.254.169.254/latest/meta-data/placement/availability-zone",
-            "url": "http://169.254.169.254/latest/meta-data/iam/security-credentials",
-            "format": {
-                "type": "json",
-                "subject_token_field_name": "access_token"
-            }
-        }
-    )
+    if not credentials:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): credentials is needed but not provided.")
+        exit()
+    if not filepath:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): filepath is needed but not provided.")
+        exit()
 
-### Azure
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(credentials, f, indent=2)
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): saved to \"{filepath}\" ")
+        return True
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error: {e}")
+        return False
 
 
-def authenticate_from_azure():
+def create_credentials_from_values(project_id, private_key_id, private_key, client_email, client_id):
     """
-    Example for authenticating from Azure using Workload Identity Federation
+    Create credentials JSON Dictionary from individual values.
     """
-    
-    config = {
-        "type": "external_account",
-        "audience": "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID",
-        "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-        "token_url": "https://sts.googleapis.com/v1/token",
-        "credential_source": {
-            "url": "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
-            "headers": {
-                "Metadata": "True"
-            },
-            "format": {
-                "type": "json",
-                "subject_token_field_name": "access_token"
-            }
-        }
+    svc_cred_dict = {
+        "type": "service_account",
+        "project_id": project_id,
+        "private_key_id": private_key_id,
+        "private_key": private_key,
+        "client_email": client_email,
+        "client_id": client_id,
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}"
     }
+    # etag?
+
+    #svc_cred_json = base64.b64decode(credentials_dict).decode('utf-8')
+    #svc_cred_dict = json.loads(svc_cred_str)  # Convert to dict
+
+    # WARNING: Do not print secret value in private_key_id!
+    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): {len(svc_cred_dict)} chars in {type(svc_cred_dict)}")
+    return svc_cred_dict
+
+
+def save_credentials_to_file(credentials, filename="service-account-credentials.json"):
+    """
+    Save credentials dictionary to a JSON file accessed by GCP.
+    """
+    try:
+        with open(filename, 'w') as f:
+            json.dump(credentials, f, indent=2)
+        print(f"{sys._getframe().f_code.co_name}(): Credentials template saved to \"{filename}\" ")
+        return True
+    except Exception as e:
+        print(f"{sys._getframe().f_code.co_name}(): Error saving credentials: {e}")
+        return False
+
+
+def validate_credentials_file(filename):
+    """
+    Validate that a credentials file has the required fields and type values.
+    """
+    required_fields = [
+        "type", "project_id", "private_key_id", "private_key", 
+        "client_email", "client_id", "auth_uri", "token_uri"
+    ]
     
-    # Save config to file and use it
-    with open("azure-wif-config.json", "w") as f:
-        json.dump(config, f, indent=2)
-    
-    credentials = identity_pool.Credentials.from_file("azure-wif-config.json")
-    return credentials
+    try:
+        with open(filename, 'r') as f:
+            creds = json.load(f)
+        
+        missing_fields = [field for field in required_fields if field not in creds]
+        
+        if missing_fields:
+            myutils.print_fail(f"{sys._getframe().f_code.co_name}(): Missing required fields: {missing_fields}")
+            return False
+        
+        if creds["type"] != "service_account":
+            myutils.print_fail(f"{sys._getframe().f_code.co_name}(): Invalid credential type. Must be 'service_account'")
+            return False
+            
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): Credentials file is valid!")
+        return True
+        
+    except FileNotFoundError:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): File {filename} not found")
+        return False
+    except json.JSONDecodeError:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Invalid JSON in {filename}")
+        return False
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return False
+
+
+def authenticate_with_service_account(key_path: str) -> Dict[str, Any]:
+    """
+    Authenticate using a service account key file.
+    Args:
+        key_path: Path to the service account JSON key file
+    Returns:
+        Dict containing credentials info and authenticated client
+    """
+    try:
+        #from google.cloud import storage
+        
+        # Create credentials object:
+        #from google.oauth2 import service_account
+        credentials = service_account.Credentials.from_service_account_file(
+            filename=key_path,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        
+        # Create an authenticated client (using storage as an example)
+        client = storage.Client(credentials=credentials)
+        
+        # Get service account details
+        with open(key_path, 'r') as key_file:
+            key_data = json.load(key_file)
+        
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): as: \"{key_data.get('client_email', 'Unknown')}\" ")
+        
+        return {
+            "credentials": credentials,
+            "client": client,
+            "project_id": key_data.get('project_id'),
+            "client_email": key_data.get('client_email')
+        }
+        
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        raise
 
 
 #### Other Credential
@@ -1601,147 +1460,22 @@ def save_credential_config(config: Dict, filepath: str) -> None:
     """Save credential configuration to file"""
     with open(filepath, 'w') as f:
         json.dump(config, f, indent=2)
-    print(f"✅ Credential configuration saved to {filepath}")
+    myutils.print_info(f"{sys._getframe().f_code.co_name}(): to \"{filepath}\" ")
 
-
-def example_github_actions_usage():
-    """Example usage for GitHub Actions"""
-    print("=== GitHub Actions Workload Identity Federation Example ===")
-    
-    # Configuration
-    project_id = "your-gcp-project-id"
-    pool_id = "github-pool"
-    provider_id = "github-provider"
-    service_account_email = "github-actions@your-project.iam.gserviceaccount.com"
-    repo = "your-org/your-repo"
-    
-    # Create configuration
-    config = create_github_actions_config(
-        project_id=project_id,
-        pool_id=pool_id,
-        provider_id=provider_id,
-        service_account_email=service_account_email,
-        repo=repo
-    )
-    
-    # Save configuration
-    config_file = "github-wif-config.json"
-    save_credential_config(config, config_file)
-    
-    # Use in GitHub Actions workflow
-    github_workflow = '''
-# .github/workflows/deploy.yml
-name: Deploy to GCP
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v1'
-      with:
-        workload_identity_provider: 'projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-        service_account: 'github-actions@your-project.iam.gserviceaccount.com'
-    
-    - name: 'Use gcloud CLI'
-      run: 'gcloud info'
-    '''
-    
-    print("\nSample GitHub Actions workflow:")
-    print(github_workflow)
-
-
-def example_programmatic_usage(bucket_name) -> str:
-    """Programmatic usage of Workload Identity Federation
-    # This would typically be set up in your CI/CD environment
-    """    
-    config_file = "wif-config.json"   # FileNotFoundError if not found:
-    
-    try:
-        # Initialize WIF client  from google.auth import identity_pool
-        wif_client = WorkloadIdentityFederationClient(config_file)
-        wif_client.authenticate_with_external_credential()
-        wif_client.test_gcs_access(bucket_name)   # Test GCS access
-        token = wif_client.get_access_token()
-        if token:
-            print(f"✅ Access token (first 10 chars): {token[:10]} ")
-        return token
-    except FileNotFoundError:
-        print(f"❌ Configuration file \"{config_file}\" not found.")
-        return None
-    except Exception as e:
-        print(f"❌ \"{bucket_name}\" GCS access failed: {e}")
 
 
 def get_project_info(credentials):
     """Get project information using the authenticated credentials"""
-    # from google.cloud import resourcemanager
-    
-    client = resourcemanager.Client(credentials=credentials)
+
+    # from google.cloud import resourcemanager_v3  # uv pip install google-cloud-resource-manager
+
+    client = resourcemanager_v3.Client(credentials=credentials)
     projects = client.list_projects()
     
-    print("Accessible projects:")
+    myutils.print_heading(f"{sys._getframe().f_code.co_name}(): Accessible projects:")
     for project in projects:
-        print(f"  - {project.project_id}: {project.name}")
+        myutils.print_info(f"{sys._getframe().f_code.co_name}():  - {project.project_id}: {project.name}")
 
-
-# Example credential configuration templates
-
-def save_config_template(filename="wif-config-template.json"):
-    """Save a template configuration file"""
-    
-    template = {
-        "type": "external_account",
-        "audience": "//iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/YOUR_POOL_ID/providers/YOUR_PROVIDER_ID",
-        "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-        "token_url": "https://sts.googleapis.com/v1/token",
-        "credential_source": {
-            "file": "/path/to/your/external/token",
-            "format": {
-                "type": "text"
-            }
-        },
-        # Optional: For service account impersonation
-        # "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/YOUR_SERVICE_ACCOUNT@YOUR_PROJECT.iam.gserviceaccount.com:generateAccessToken"
-    }
-    
-    with open(filename, "w") as f:
-        json.dump(template, f, indent=2)
-
-
-def auth_using_workload_identity_federation():
-    """
-    Main function demonstrating usage
-    """
-    
-    try:
-        # print("Authenticating with Workload Identity Federation...")
-        
-        # Method 1: Using config file
-        credentials = identity_pool.Credentials.from_file("your-config.json")
-        
-        # Test the credentials
-        if not credentials.valid:
-            credentials.refresh(google.auth.transport.requests.Request())
-        
-        print("Authentication successful! Token expires at: {credentials.expiry}")
-        
-        # Use the credentials with a Google Cloud service:
-        storage_client = storage.Client(credentials=credentials)
-        print("Successfully created authenticated Storage client")
-        
-    except Exception as e:
-        print(f"Authentication failed: {e}")
 
 
 #### Check install packages
@@ -1765,9 +1499,9 @@ def check_install_packages():
                 pip.main(['install', package])
         return True
     except Exception as e:
-        print(f"❌ Error installing packages: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error installing packages: {e}")
         print("Please manually install the required packages:")
-        print("pip install google-cloud-storage google-auth google-auth-oauthlib google-auth-httplib2")
+        print("uv pip install google-cloud-storage google-auth google-auth-oauthlib google-auth-httplib2")
         return False
 
 
@@ -1844,13 +1578,15 @@ def get_project_id() -> str:
 #### Google Region
 
 
-def list_regions():
+def list_regions(project_id=None):
     """List all available Google Cloud regions with their details."""
     #from google.cloud import compute_v1
     #import tabulate
     #import pandas as pd
     #import sys
-
+    if not project_id:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): project_id not provided")
+        exit(9)
     try:
         # Create a client
         client = compute_v1.RegionsClient()
@@ -1873,7 +1609,7 @@ def list_regions():
         return regions_data
     
     except Exception as e:
-        print(f"Error listing regions: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
         return []
 
 def display_regions(regions_data, output_format="table"):
@@ -2056,6 +1792,7 @@ def list_google_sheet(sheet_id, range_in):
     """
     # range_in="Sheet1!A1:D5"
     # from googleapiclient.discovery import build
+    
     # ... (authentication code is nearly identical to the Docs example above)
     # TODO: define creds.
     service = build("sheets", "v4", credentials="creds")
@@ -2102,7 +1839,7 @@ def get_gcp_document_id() -> str:
     return GOOGLE_DOCUMENT_ID
 
 
-def get_google_doc_title(doc_id):
+def get_google_doc_title(doc_id=None):
     """
     See https://developers.google.com/workspace/sheets/api/quickstart/python
     import os.path
@@ -2112,6 +1849,10 @@ def get_google_doc_title(doc_id):
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
     """
+    if not doc_id:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): doc_id not provided")
+        exit(9)
+
     creds = None
     # Load credentials if they exist:
     if os.path.exists("token.json"):
@@ -2129,7 +1870,7 @@ def get_google_doc_title(doc_id):
             token.write(creds.to_json())
     try:
         service = build("docs", "v1", credentials=creds)
-        document = service.documents().get(documentId=DOCUMENT_ID).execute()
+        document = service.documents().get(documentId=doc_id).execute()
             # FIXME: F821 Undefined name `DOCUMENT_ID`
         print(f"The title of the document is: {document.get('title')}")
     except HttpError as err:
@@ -2150,7 +1891,7 @@ def get_secret_from_secret_manager(project_id, secret_id, version_id="latest", s
     try:
         client = secretmanager.SecretManagerServiceClient()
         if not secret_id:
-            print("secret_id not provided within get_secret_from_secret_manager() ")
+            myutils.print_fail(f"{sys._getframe().f_code.co_name}(): secret_id not provided")
             return None
 
         if secret_in:
@@ -2166,7 +1907,7 @@ def get_secret_from_secret_manager(project_id, secret_id, version_id="latest", s
             version = client.add_secret_version(
                 request={"parent": secret.name, "payload": {"data": b"{secret_in}"}}
             )
-            print(f"secret_id: {secret_id} v{version} added.")
+            myutils.print_info(f"{sys._getframe().f_code.co_name}(): secret_id: {secret_id} v{version} added.")
 
         # Build the resource name of the secret version:
         if version_id == "latest":
@@ -2178,33 +1919,56 @@ def get_secret_from_secret_manager(project_id, secret_id, version_id="latest", s
         response_obj = client.access_secret_version(request={"name": version_name})
         
         # WARNING: Do not print the secret in a production environment!
-        print("Secret value not shown by get_secret_from_secret_manager() ")
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): Secret value not shown")
         return response_obj.payload.data.decode("UTF-8")
     
     except Exception as e:
-        print(f"❌ Error inget_secret_from_secret_manager(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error inget_secret_from_secret_manager(): {e}")
         return None    
+
+
+### Backup
+
+
+def start_backup(DRIVE_VOLUME=None) -> float:
+    """On macOS, invoke macOS Time Machine drive to backup all files changed.
+    USAGE: run_seconds = start_backup()
+    :param VOLUME: The name of the external volume (e.g., 'T7') 
+       We assume it's properly formatted.
+    : Global flag DO_BACKUP to backup or not.
+    : Global drive within /Volumes/DRIVE_VOLUME
+    : returns func run time in seconds.
+    """
+    if not myutils.is_macos():
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): not macOS. No backup initiated.")
+        return None
+    if not DRIVE_VOLUME:        
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): DRIVE_VOLUME not specified.")
+        return None
+
+    # Verify that external USB drive is inserted:
+    try:
+        # import subprocess
+        # Set the backup destination
+        set_destination_command = ["tmutil", "setdestination", f"/Volumes/{DRIVE_VOLUME}"]
+
+        func_start_timer = time.perf_counter()
+        subprocess.run(set_destination_command, check=True)
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): --volume {DRIVE_VOLUME} used by start_backup()")
+
+        start_backup_command = ["tmutil", "startbackup", "--block"]
+        subprocess.run(start_backup_command, check=True)
+
+        func_duration = time.perf_counter() - func_start_timer
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): completed in {func_duration:.5f} seconds")
+    except subprocess.CalledProcessError as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+
+    return func_duration
 
 
 #### GCS Authenticated Bucket Storage
 
-
-def use_authenticated_client():
-    """
-    Example of using the authenticated credentials with Google Cloud services
-    """
-    
-    # Get credentials using any of the above methods
-    credentials = authenticate_with_workload_identity_federation()
-    
-    # Use with Google Cloud Storage
-    storage_client = storage.Client(credentials=credentials)
-    
-    # List buckets to test the authentication
-    buckets = storage_client.list_buckets()
-    print("Accessible buckets:")
-    for bucket in buckets:
-        print(f"  - {bucket.name}")
 
 
 def list_gcs_buckets(client_obj):
@@ -2214,16 +1978,16 @@ def list_gcs_buckets(client_obj):
         client: An authenticated storage client
     """
     try:
-        print("\n📋 Listing storage buckets to verify authentication within list_gcs_buckets() ")
+        myutils.print_trace(f"{sys._getframe().f_code.co_name}(): Listing storage buckets to verify authentication within list_gcs_buckets() ")
         buckets = list(client_obj.list_buckets())
         
         if not buckets:
-            print("No buckets found in this project within list_gcs_buckets() ")
+            myutils.print_error(f"{sys._getframe().f_code.co_name}(): No buckets found in this project within list_gcs_buckets() ")
         else:
             for bucket in buckets:
-                print(f" - {bucket.name}")
+                myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): - {bucket.name}")
     except Exception as e:
-        print(f"❌ Error listing buckets in list_gcs_buckets(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error listing buckets in list_gcs_buckets(): {e}")
 
 
 # TODO: Google Key 
@@ -2239,11 +2003,11 @@ def use_storage_with_adc():
     
     # List buckets
     buckets = storage_client.list_buckets()
-    myutils.print_heading("Cloud Storage Buckets:")
+    myutils.print_heading(f"{sys._getframe().f_code.co_name}(): Cloud Storage Buckets:")
     for bucket in buckets:
-        print(f"- {bucket.name}")
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): {bucket.name}")
     else:
-        print("No storage found.")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): No storage found.")
 
 
 #### BigQuery
@@ -2256,12 +2020,12 @@ def use_bigquery_with_adc():
     
     # List datasets
     datasets = list(bigquery_client.list_datasets())
-    myutils.print_heading("BigQuery Datasets:")
+    myutils.print_heading(f"{sys._getframe().f_code.co_name}(): BigQuery Datasets:")
     if datasets:
         for dataset in datasets:
             print(f"- {dataset.dataset_id}")
     else:
-        print("No datasets found.")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): No datasets found.")
 
 
 #### Pub/Sub
@@ -2277,7 +2041,7 @@ def use_pubsub_with_adc():
     publisher = pubsub_v1.PublisherClient()
     subscriber = pubsub_v1.SubscriberClient()
         # FIXME: F841 Local variable `subscriber` is assigned to but never used
-
+    print(f"{sys._getframe().f_code.co_name}(): subscriber: \"{subscriber}\" ")
     # Get authenticated project ID
     _, project_id = google.auth.default()
     
@@ -2288,26 +2052,6 @@ def use_pubsub_with_adc():
         print("Pub/Sub Topics:")
         for topic in topics:
             print(f"- {topic.name}")
-
-
-#### Encryption/Decrpytion of secrets
-
-
-def encrypt_secret(cleartext_in=None):
-    """Encrypt a secret using Fernet
-    """
-    # from cryptography.fernet import Fernet   # pip install cryptography
-    if not cleartext_in:
-        cleartext_in = b"A really secret message. Not for prying eyes."
-    key = Fernet.generate_key()
-    f = Fernet(key)
-    binary_token = f.encrypt(cleartext_in)
-    # CAUTION: token is a command which outputs the token b'...(don't do it)
-    # decrypted_text = f.decrypt(token)
-      # b'A really secret message. Not for prying eyes.'
-    myutils.print_verbose(f"Encrypted binary token contains {len(str(binary_token))} characters.")
-    # CAUTION: It is a security violation to display secure tokens in the console.
-    return binary_token
 
 
 #### Send Gmail, Slack, Discord, SMS, etc.
@@ -2343,16 +2087,100 @@ if __name__ == "__main__":
         check_install_packages()
 
     my_account = get_account_id()  # client email address
+
+    # Created by running CLI: gcloud auth application-default login
+    my_adc_path = f"{my_home_dir}/.config/gcloud/application_default_credentials.json"
+        # Windows	%APPDATA%\gcloud\application_default_credentials.json
+
+    print(f"project_id: \"{my_project_id}\" within get_adc_project_id() ")   
+    
     if args.setup_adc:   # if requested by --setup-adc:
         rc = setup_local_adc()  # which calls get_adc_project_id()
     else:   
-        my_project_id = get_adc_project_id()
+        my_project_id = get_adc_project_id(my_adc_path)
     if not my_project_id:
         my_project_id = get_project_id()
     if my_project_id:
         enable_cloud_resource_manager_api(my_project_id)
     if not my_project_number:
         my_project_number, my_project_id = get_project_number(my_project_id)
+
+    # Single global time for service account creation during this run:
+    yymmddhhmm = myutils.get_user_local_timestamp('yymmddhhmm')
+
+    pool_location = "global"
+    # my_provider_id, my_pool_id = get_provider_pool_id(my_project_id)
+    my_provider_id = "prov-{pool_location}-{yymmddhhmm}"
+        # provider_ids are 1-32 characters, lowercase letters, numbers, and hyphens only
+
+    my_pool_id = f"{pool_location}-{yymmddhhmm}"
+    max_chars = 21
+    if len(my_pool_id) > max_chars:
+        myutils.print_fail(f"{sys._getframe().f_code.co_name}(): my_pool_id: \"{my_pool_id}\" > {max_chars} chars!")
+        exit()
+
+    my_pool_display_name="GitHub Actions Pool",
+    my_pool_description="Pool for GitHub Actions OIDC"
+
+    my_svc_acct_json = create_svc_acct_email(my_project_id)
+          # The beginning of credential.json file for service account:
+          # {'name': 'projects/sdk83360/serviceAccounts/svc-sdk83360-2506051513@sdk83360.iam.gserviceaccount.com', 
+          # 'projectId': 'sdk83360', 
+          # 'uniqueId': '123456749012345678901',  [21 chars]
+          # 'email': 'svc-sdk83360-2506051513@sdk83360.iam.gserviceaccount.com', 
+          # 'displayName': 'svc-sdk83360-2506051513-name', 
+          # 'etag': 'MDEwMjE5MjA=', 
+          # 'oauth2ClientId': '104640841729869098164'} 
+    my_svc_acct_uniqueId = my_svc_acct_json['uniqueId']
+    my_svc_acct_email = my_svc_acct_json['email']  # '???@?.iam.gserviceaccount.com
+    my_svc_acct_etag = my_svc_acct_json['etag']
+    my_svc_acct_oauth2ClientId = my_svc_acct_json['oauth2ClientId']
+
+    my_svc_cred_path = get_svc_credentials_path(my_svc_acct_email)
+    my_svc_acct_key_path = get_svc_acct_key_path(my_svc_acct_email)
+    # svc_acct_key_path = get_svc_acct_key_path(svc_acct_credentials_path)
+        # inside svc_acct_key_path=f"{svc_acct_key_path}/{svc_acct_email}"
+
+    myutils.generate_rsa_keypair(key_size=4096, output_dir=my_svc_acct_key_path)
+    # TODO: Retrieve from private key file:
+    svc_acct_key_private_path = f"{my_svc_acct_key_path}/private_key.pem"
+        # inside svc_acct_key_public_path=f"{svc_acct_key_path}/public_key.pem"
+    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): file_path: \"{svc_acct_key_private_path}\"")
+    private_key_text = myutils.read_file_to_string(svc_acct_key_private_path)
+        # private_key_text="-----BEGIN PRIVATE KEY-----\...\n-----END PRIVATE KEY-----\n"
+    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): {len(private_key_text)} chars in private_key.pem")
+    #svc_acct_key_file = create_svc_acct_key_file(svc_acct_credentials_path, private_key_text)
+    private_key_text = myutils.read_file_to_string(svc_acct_key_private_path)
+    
+    # WARNING: Do not expose secret value in private_key_id:
+    my_private_key_id = myutils.gen_random_alphanumeric(12)  # like "abc123def456"  # 12 char.
+
+    svc_cred_dict = create_credentials_from_values(
+        project_id=my_project_id,
+        private_key_id=my_private_key_id,
+        private_key=private_key_text,
+        client_email=my_svc_acct_email,
+        client_id=my_svc_acct_oauth2ClientId,
+    )
+    # Add:
+    #   unique_id=my_svc_acct_uniqueId
+    #   etag=my_svc_acct_etag,
+
+    # SO FAR SO GOOD
+    my_svc_acct_json_path = f"{my_svc_acct_key_path}.json"
+    result = save_credentials_to_file(svc_cred_dict, my_svc_acct_json_path)
+    if result:  # True
+        print(f"create_svc_acct_file(): {result} ")
+
+    # TODO: Clean up unused service accounts!
+    # Manually view Service Accounts using GUI Chrome browser at:
+    # https://console.cloud.google.com/iam-admin/serviceaccounts
+
+    # TODO: Login using Service Account or ADC or Workload Identity PoolPool
+
+    exit()
+
+    # Now, do something with GCP Secretes, Storage, BigQuery, etc.
 
     credentials, my_project_id = authenticate_with_adc()
         # Successfully authenticated with ADC. Project ID: weather-454da
@@ -2371,50 +2199,7 @@ if __name__ == "__main__":
         print("2. Use a service account key with GOOGLE_APPLICATION_CREDENTIALS environment variable")
         print("3. Deploy to a GCP environment with appropriate service account attached")
 
-    # GitHub Actions OIDC configuration
-    my_github_pool_id = "your-github-pool-id"  # 1-32 characters, lowercase letters, numbers, and hyphens only
-    GITHUB_AUDIENCE = f"https://iam.googleapis.com/projects/{my_project_id}/locations/global/workloadIdentityPools/{my_github_pool_id}/providers/{my_provider_id}"
 
-    try:
-        # Step 1: Create Workload Identity Pool
-        my_github_pool_object = create_workload_identity_pool(
-            project_id=my_project_id,
-            pool_id=my_github_pool_id,
-            display_name="GitHub Actions Pool",
-            description="Pool for GitHub Actions workflows"
-        )
-        print(f"my_github_pool_id=\"{my_github_pool_id}\" ")
-        exit()
-            
-        # Step 2: Create Workload Identity Provider for GitHub Actions
-        GITHUB_ISSUER = "https://token.actions.githubusercontent.com"
-        my_provider_object = create_workload_identity_provider(
-            project_id=PROJECT_ID,
-            pool_id=POOL_ID,
-            provider_id=PROVIDER_ID,
-            issuer_uri=GITHUB_ISSUER,
-            audience=GITHUB_AUDIENCE,
-            display_name="GitHub Actions Provider",
-            description="OIDC provider for GitHub Actions",
-            attribute_mapping={
-                "google.subject": "assertion.sub",
-                "attribute.actor": "assertion.actor",
-                "attribute.repository": "assertion.repository",
-                "attribute.repository_owner": "assertion.repository_owner"
-            },
-            attribute_condition="assertion.repository_owner == 'your-github-org'"
-        )
-        print(f"my_provider_id=\"{my_provider_id}\" ")
-        
-        # Step 3: List all pools
-        list_workload_identity_pools(my_project_id)
-
-        print(f"Pool Name: {my_github_pool_object.name}")
-        print(f"Provider Name: {my_provider_object.name}")
-    except Exception as e:
-        print(f"Setup failed: {e}")
-    
-    exit()
     
     #gcp_token_refresh()
 
@@ -2461,7 +2246,7 @@ if __name__ == "__main__":
             list_gcs_buckets(auth_result["client"])
 
     if LIST_REGIONS:
-        regions_data = list_regions()
+        regions_data = list_regions(my_project_id)
         display_regions(regions_data, output_format)
 
         # print_svcs_price_list()
