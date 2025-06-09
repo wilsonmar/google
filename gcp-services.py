@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: MPL-2.0
-__commit_date__ = "2025-06-06"
-__last_commit__ = "v014 + ruff fixes :gcp-services.py"
+__commit_date__ = "2025-06-07"
+__last_commit__ = "v016 + use svc_acct :gcp-services.py"
 __repository__ = "https://github.com/bomonike/google/blob/main/gcp-services.py"
 __status__ = "WORKING: ruff check gcp-services.py => All checks passed!"
 
@@ -198,7 +198,7 @@ try:
     import google.auth    # for google.auth.default()
     # UNUSED: from google.auth import identity_pool
     from google.auth import default, credentials
-    from googleapiclient.discovery import build              # uv pip install google-api-python-client
+    from googleapiclient.discovery import build   # uv pip install google-api-python-client to authenticate_service_account()
         # service = build('calendar', 'v3', credentials=credentials, cache_discovery=False)
         # See https://www.perplexity.ai/search/googleapiclient-discovery-cach-ll78_HWfRCm64biN3HJd_A#0
     #from google.cloud.iam_v1 import WorkloadIdentityPoolsClient  # uv pip install google-cloud-iam
@@ -263,7 +263,7 @@ except Exception as e:
     print(f"import exception: {e}")
     #print("    sys.prefix      = ", sys.prefix)
     #print("    sys.base_prefix = ", sys.base_prefix)
-    print("Please activate your virtual environment:\n  python3 -m venv venv && source venv/bin/activate")
+    print("Please activate your virtual environment:\n  python3 -m venv venv && source .venv/bin/activate")
     print("  uv pip install --upgrade -r requirements.txt")
     exit(9)
 
@@ -845,7 +845,7 @@ def get_adc_project_id(adc_path: str) -> str:
     # if CLI: "gcloud auth application-default login" was run to setup file:
 
     if not os.path.exists(adc_path):
-        myutils.print_error(f"ADC project_id not found at {my_adc_path} within get_adc_project_id() ")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): ADC project_id not found at \"{my_adc_path}\" ")
         rc = setup_local_adc()
         return rc
     
@@ -924,10 +924,10 @@ def get_project_number(project_id=None) -> tuple[str, str]:
     try:
         project = client.get_project(name=project_name)
         project_number = project.name.split('/')[-1]
-        print(f"✅ project_number: {project_number} from project_id: {project_id} ")
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): project_number: {project_number} from project_id: {project_id} ")
         return project_number, project_id  # Returns project number
     except Exception as e:
-        print(f"get_project_number(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
         # FIXME: 403 Cloud Resource Manager API has not been used in project sdk83360 before or it is disabled.
         # Enable it by visiting https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview?project=sdk83360 
         # then retry. If you enabled this API recently, wait a few minutes fo
@@ -1013,30 +1013,29 @@ def create_gcp_project(project_name, project_id=None, parent_org_id=None, parent
         raise
 
 
-def check_api_status(project_id) -> str:
+def check_api_status(project_id,gcp_svc_id) -> str:
     """
-    Check if the Cloud Resource Manager API is already enabled.
-    
+    Check if an individual API is already enabled
     Args:
         project_id (str): The Google Cloud Project ID
-        
+        gcp_svc_id="cloudresourcemanager"
     Returns:
         bool: True if enabled, False otherwise
     """
     try:
         client = service_usage_v1.ServiceUsageClient()
-        service_name = f"projects/{project_id}/services/cloudresourcemanager.googleapis.com"
+        service_name = f"projects/{project_id}/services/{gcp_svc_id}.googleapis.com"
         
         request = service_usage_v1.GetServiceRequest(name=service_name)
         service = client.get_service(request=request)
         
         is_enabled = service.state == service_usage_v1.State.ENABLED
         status = "enabled" if is_enabled else "disabled"
-        myutils.print_verbose(f"project_id: \"{project_id}\" Cloud Resource Manager API is: {status}")
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name} project_id: \"{project_id}\" {status} for {gcp_svc_id} ")
         return is_enabled
         
     except Exception as e:
-        print(f"Error checking API status: {str(e)}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {gcp_svc_id}: {str(e)}")
         return None
 
 
@@ -1047,17 +1046,49 @@ def enable_cloud_resource_manager_api(project_id:str) -> bool:
     https://console.cloud.google.com/apis/library/cloudresourcemanager.googleapis.com
     Args:
         project_id (str): The Google Cloud Project ID
-    CLI:
+        # TODO: Convert to a dictionary of services and iterate:
+        # https://www.googleapis.com/auth/spreadsheets - Google Sheets
+        # https://www.googleapis.com/auth/drive - Google Drive
+        # https://www.googleapis.com/auth/gmail.readonly - Gmail (read-only)
+        # https://www.googleapis.com/auth/gmail.modify - Gmail (read/write)
+
+            # IAM Service Account Credentials API					
+            # Identity and Access Management (IAM) API					
+            # Cloud Logging API
+            # Cloud Monitoring API
         gcloud services enable iamcredentials.googleapis.com --project=$PROJECT_ID
         gcloud services enable sts.googleapis.com --project=$PROJECT_ID
+            storage.googleapis.com  # Service Usage API  Cloud Storage API
+            storage-component.googleapis.com  # Cloud Storage - a RESTful service for storing and accessing your data
+               # Google Cloud Storage JSON API					
+               Google Cloud APIs					
+
+            # Cloud Resource Manager API	
+            Analytics Hub API					
+            BigQuery API					
+            BigQuery Connection API					
+            BigQuery Data Policy API					
+            BigQuery Migration API					
+            BigQuery Reservation API					
+            BigQuery Storage API					
+            Cloud Dataplex API					
+            Cloud Datastore API					
+            Cloud SQL
+            Cloud Trace API					
+            Dataform API					
+            Security Token Service API					
+            Service Management API					
+
     Returns:
         bool: True if successful, False otherwise
+    CLI:
     """
     if not project_id:
         print("No project_id provided to enable_cloud_resource_manager_api() ")
         return False
-    if check_api_status(project_id) == "enabled":
-        print(f"Cloud Resource Manager API is already enabled for project {project_id}")
+    gcp_svc_id="cloudresourcemanager"
+    if check_api_status(project_id, gcp_svc_id) == "enabled":
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): project: \"{project_id}\" is enabled for \"{gcp_svc_id}\" ")
         return True
 
     try:
@@ -1065,14 +1096,10 @@ def enable_cloud_resource_manager_api(project_id:str) -> bool:
         client = service_usage_v1.ServiceUsageClient()
         
         # Define the service name for Cloud Resource Manager API
-        service_name = f"projects/{project_id}/services/cloudresourcemanager.googleapis.com"
-        
-        #print(f"Enabling Cloud Resource Manager API for project: {project_id}")
-        
-        # Create the enable service request
+        service_name = f"projects/{project_id}/services/{gcp_svc_id}.googleapis.com"
+        # Create the enable service request:
         request = service_usage_v1.EnableServiceRequest(name=service_name)
-        
-        # Enable the service (this returns a long-running operation)
+        # Enable the service (this returns a long-running operation):
         operation = client.enable_service(request=request)
         
         # print("Waiting for operation to complete...")
@@ -1127,7 +1154,7 @@ def setup_local_adc() -> bool:
             return False
             
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error setting up ADC: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error setting up ADC: {str(e)}")
         return False
 
 
@@ -1173,6 +1200,7 @@ def check_svc_acct_exists(project_id: str = None, svc_acct_email: str = None):
         name = f'projects/{project_id}/serviceAccounts/{svc_acct_email}'
         try:
             service.projects().serviceAccounts().get(name=name).execute()
+            myutils.print_info(f"{sys._getframe().f_code.co_name}(): 404 to \"{name}\" ")
             return True  # Service account exists
         except HttpError as e:
             if e.resp.status == 404:
@@ -1183,7 +1211,7 @@ def check_svc_acct_exists(project_id: str = None, svc_acct_email: str = None):
         myutils.print_info(f"Service account: {svc_acct_email} exists!")
         return True
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
         # [Errno 2] No such file or directory: '/Users/.../.google_credentials/svc-....json' 
         return False
 
@@ -1237,7 +1265,8 @@ def create_svc_acct_email(project_id: str = None, svc_acct_email: str = None, di
         #from google.auth.transport.requests import Request
         credentials.refresh(Request())
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): credentials: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): credentials: {str(e)}")
+        return False
 
     try:
         access_token = credentials.token  # such as "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -1256,7 +1285,8 @@ def create_svc_acct_email(project_id: str = None, svc_acct_email: str = None, di
         }
         response = requests.post(url, headers=headers, json=data)
         key_data = response.json()
-        myutils.print_trace(f"{sys._getframe().f_code.co_name}(): {key_data}")
+        # WARNING: Do not print out key_data which contains secret values!
+        myutils.print_trace(f"{sys._getframe().f_code.co_name}(): {len(key_data)} chars")
             # The beginning of credential.json file for service account:
             # {'name': 'projects/sdk83360/serviceAccounts/svc-sdk83360-2506051513@sdk83360.iam.gserviceaccount.com', 
             # 'projectId': 'sdk83360', 
@@ -1268,7 +1298,7 @@ def create_svc_acct_email(project_id: str = None, svc_acct_email: str = None, di
         return key_data
 
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
         return None
 
 
@@ -1291,6 +1321,7 @@ def get_svc_credentials_path(svc_acct_email) -> str:
         myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): svc_acct_credentials_path: \"{svc_acct_credentials_path}\" ")
         # like "/Users/johndoe/.google_credentials/svc-sdk83360-2506050022@sdk83360.iam.gserviceaccount.com.json"
         return svc_acct_credentials_path
+
 
 def get_svc_acct_key_path(svc_acct_email) -> str:
     """This utility function returns the full file path to the  
@@ -1333,7 +1364,7 @@ def save_svc_acct_credentials_path(credentials: str, filepath: str) -> bool:
         myutils.print_info(f"{sys._getframe().f_code.co_name}(): saved to \"{filepath}\" ")
         return True
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error: {str(e)}")
         return False
 
 
@@ -1365,15 +1396,15 @@ def create_credentials_from_values(project_id, private_key_id, private_key, clie
 
 def save_credentials_to_file(credentials, filename="service-account-credentials.json"):
     """
-    Save credentials dictionary to a JSON file accessed by GCP.
+    Save credentials dictionary to a JSON file for access by GCP.
     """
     try:
         with open(filename, 'w') as f:
             json.dump(credentials, f, indent=2)
-        print(f"{sys._getframe().f_code.co_name}(): Credentials template saved to \"{filename}\" ")
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): Credentials template saved to \"{filename}\" ")
         return True
     except Exception as e:
-        print(f"{sys._getframe().f_code.co_name}(): Error saving credentials: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
         return False
 
 
@@ -1410,11 +1441,11 @@ def validate_credentials_file(filename):
         myutils.print_error(f"{sys._getframe().f_code.co_name}(): Invalid JSON in {filename}")
         return False
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
         return False
 
 
-def authenticate_with_service_account(key_path: str) -> Dict[str, Any]:
+def auth_with_svc_acct_json(key_path: str) -> Dict[str, Any]:
     """
     Authenticate using a service account key file.
     Args:
@@ -1438,18 +1469,20 @@ def authenticate_with_service_account(key_path: str) -> Dict[str, Any]:
         # Get service account details
         with open(key_path, 'r') as key_file:
             key_data = json.load(key_file)
+        # WARNING: Do not print key_data which contains secret values!
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): key_data: {len(key_data)} chars ")
         
-        myutils.print_info(f"{sys._getframe().f_code.co_name}(): as: \"{key_data.get('client_email', 'Unknown')}\" ")
-        
-        return {
+        svc_acct_dict = {
             "credentials": credentials,
             "client": client,
             "project_id": key_data.get('project_id'),
             "client_email": key_data.get('client_email')
         }
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): svc_acct_dict: {svc_acct_dict}")
+        return svc_acct_dict   # -> Dict[str, Any]:
         
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
         raise
 
 
@@ -1458,10 +1491,14 @@ def authenticate_with_service_account(key_path: str) -> Dict[str, Any]:
 
 def save_credential_config(config: Dict, filepath: str) -> None:
     """Save credential configuration to file"""
-    with open(filepath, 'w') as f:
-        json.dump(config, f, indent=2)
-    myutils.print_info(f"{sys._getframe().f_code.co_name}(): to \"{filepath}\" ")
-
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(config, f, indent=2)
+        myutils.print_info(f"{sys._getframe().f_code.co_name}(): to \"{filepath}\" ")
+        return True
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {str(e)}")
+        return False
 
 
 def get_project_info(credentials):
@@ -1499,7 +1536,7 @@ def check_install_packages():
                 pip.main(['install', package])
         return True
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error installing packages: {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
         print("Please manually install the required packages:")
         print("uv pip install google-cloud-storage google-auth google-auth-oauthlib google-auth-httplib2")
         return False
@@ -1559,7 +1596,8 @@ def get_project_id() -> str:
         #    if project:
         #        return project
     except Exception as e:
-        print(f"get_project_id() {e}", file=sys.stderr)
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        # {file=sys.stderr} 
         exit(9)
     
     # WAY 3: Read from .env file:
@@ -1771,19 +1809,115 @@ def print_svcs_price_list() -> None:
     Print Google Cloud Services pricing information
     """
     for service, pricing in GCP_SVCS_PRICING.items():
-        print(f"{service}:")
+        myutils.print_heading(f"{sys._getframe().f_code.co_name}(): service: \"{service}\" ")
         for key, value in pricing.items():
             print(f"    {key}: {value}")
         print()  # Extra line for readability
 
 
+#### Google Workspaces Sheets, Documents zzz
 
 
-#### Google Workspaces Sheets, Documents, Gmail
+def authenticate_service_account(credentials_file, scopes):
+    """
+    Authenticate using service account credentials
+    
+    Args:
+        credentials_file (str): Path to the credentials.json file
+        scopes (list): List of Google API scopes needed
+    Returns:
+        google.oauth2.service_account.Credentials: Authenticated credentials object
+    """
+    #from google.oauth2 import service_account
+    #from googleapiclient.discovery import build
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            credentials_file, 
+            scopes=scopes
+        )
+        return credentials
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return None
+
+def create_service(credentials, service_name, version):
+    """
+    Create a Google API service object
+    
+    Args:
+        credentials: Authenticated credentials object
+        service_name (str): Name of the Google service (e.g., 'sheets', 'drive', 'gmail')
+        version (str): API version (e.g., 'v4', 'v3', 'v1')
+    
+    Returns:
+        Google API service object
+    """
+    try:
+        service = build(service_name, version, credentials=credentials)
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): service: \"{service}\" ")
+        return service
+    except Exception as e:
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return None
 
 
-# def get_google_sheet_id():
-# TODO: Spreadsheet of Public file "Musicals" for View at Copy link: https://docs.google.com/spreadsheets/d/11CTYgW5TP9IzR8LR4NYWhxyanYp5XJypE4eMfnBIlhI/edit?usp=sharing
+# Alternative: Direct authentication for specific services
+def quick_sheets_auth(credentials_file):
+    """Quick authentication specifically for Google Sheets"""
+    scopes = ['https://www.googleapis.com/auth/spreadsheets']
+    creds = service_account.Credentials.from_service_account_file(
+        credentials_file, scopes=scopes
+    )
+    service = build('sheets', 'v4', credentials=creds)
+    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): service: \"{service}\" ")
+    return service
+
+
+def quick_drive_auth(credentials_file):
+    """Quick authentication specifically for Google Drive"""
+    scopes = ['https://www.googleapis.com/auth/drive']
+    creds = service_account.Credentials.from_service_account_file(
+        credentials_file, scopes=scopes
+    )
+    service = build('drive', 'v3', credentials=creds)
+    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): service: \"{service}\" ")
+    return service
+
+
+# Example of reading a Google Sheet
+def read_sheet_example(credentials_file, spreadsheet_id, range_name):
+    """
+    Example function to read data from a Google Sheet
+    
+    Args:
+        credentials_file (str): Path to credentials.json
+        spreadsheet_id (str): The ID of the Google Sheet
+        range_name (str): Range to read (e.g., 'Sheet1!A1:C10')
+    """
+    try:
+        service = quick_sheets_auth(credentials_file)
+        
+        result = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id,
+            range=range_name
+        ).execute()
+        
+        values = result.get('values', [])
+        
+        if not values:
+            print('No data found.')
+            return None
+        
+        print(f'Retrieved {len(values)} rows of data:')
+        for row in values:
+            print(row)
+        
+        return values
+        
+    except Exception as e:
+        myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): service: \"{service}\" ")
+        print(f'Error reading sheet: {e}')
+        return None
 
 
 def list_google_sheet(sheet_id, range_in):
@@ -1801,11 +1935,6 @@ def list_google_sheet(sheet_id, range_in):
     result = sheet.values().get(spreadsheetId="sheet_id", range=range_in).execute()
     values = result.get("values", [])
     print(values)
-
-
-SCOPES = ["https://www.googleapis.com/auth/documents.readonly",
-            'https://www.googleapis.com/auth/spreadsheets', 
-            'https://www.googleapis.com/auth/gmail.send']  # Adjust as needed
 
 def gcp_token_refresh():
     """
@@ -1987,7 +2116,7 @@ def list_gcs_buckets(client_obj):
             for bucket in buckets:
                 myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): - {bucket.name}")
     except Exception as e:
-        myutils.print_error(f"{sys._getframe().f_code.co_name}(): Error listing buckets in list_gcs_buckets(): {e}")
+        myutils.print_error(f"{sys._getframe().f_code.co_name}(): {e}")
 
 
 # TODO: Google Key 
@@ -2079,7 +2208,7 @@ def send_gmail():
 
 
 if __name__ == "__main__":
-
+    
     if SHOW_FUNCTIONS:
         myutils.list_pgm_functions(sys.argv[0])
     
@@ -2087,13 +2216,10 @@ if __name__ == "__main__":
         check_install_packages()
 
     my_account = get_account_id()  # client email address
-
+    
     # Created by running CLI: gcloud auth application-default login
     my_adc_path = f"{my_home_dir}/.config/gcloud/application_default_credentials.json"
         # Windows	%APPDATA%\gcloud\application_default_credentials.json
-
-    print(f"project_id: \"{my_project_id}\" within get_adc_project_id() ")   
-    
     if args.setup_adc:   # if requested by --setup-adc:
         rc = setup_local_adc()  # which calls get_adc_project_id()
     else:   
@@ -2145,10 +2271,8 @@ if __name__ == "__main__":
     # TODO: Retrieve from private key file:
     svc_acct_key_private_path = f"{my_svc_acct_key_path}/private_key.pem"
         # inside svc_acct_key_public_path=f"{svc_acct_key_path}/public_key.pem"
-    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): file_path: \"{svc_acct_key_private_path}\"")
     private_key_text = myutils.read_file_to_string(svc_acct_key_private_path)
         # private_key_text="-----BEGIN PRIVATE KEY-----\...\n-----END PRIVATE KEY-----\n"
-    myutils.print_verbose(f"{sys._getframe().f_code.co_name}(): {len(private_key_text)} chars in private_key.pem")
     #svc_acct_key_file = create_svc_acct_key_file(svc_acct_credentials_path, private_key_text)
     private_key_text = myutils.read_file_to_string(svc_acct_key_private_path)
     
@@ -2166,20 +2290,31 @@ if __name__ == "__main__":
     #   unique_id=my_svc_acct_uniqueId
     #   etag=my_svc_acct_etag,
 
-    # SO FAR SO GOOD
     my_svc_acct_json_path = f"{my_svc_acct_key_path}.json"
     result = save_credentials_to_file(svc_cred_dict, my_svc_acct_json_path)
     if result:  # True
-        print(f"create_svc_acct_file(): {result} ")
-
+        auth_result = auth_with_svc_acct_json(my_svc_acct_json_path)
     # TODO: Clean up unused service accounts!
     # Manually view Service Accounts using GUI Chrome browser at:
     # https://console.cloud.google.com/iam-admin/serviceaccounts
 
+
+    SCOPES = ["https://www.googleapis.com/auth/documents.readonly",
+                'https://www.googleapis.com/auth/spreadsheets', 
+                'https://www.googleapis.com/auth/gmail.send']  # Adjust as needed
+
+    #### Google Workspace Sheets, Documents, Gmail
+
+    # def get_google_sheet_id():
+    # TODO: Spreadsheet of Public file "Musicals" for View at Copy link: 
+    # https://docs.google.com/spreadsheets/d/11CTYgW5TP9IzR8LR4NYWhxyanYp5XJypE4eMfnBIlhI/edit?usp=sharing
+
     # TODO: Login using Service Account or ADC or Workload Identity PoolPool
+
 
     exit()
 
+    
     # Now, do something with GCP Secretes, Storage, BigQuery, etc.
 
     credentials, my_project_id = authenticate_with_adc()
@@ -2224,7 +2359,7 @@ if __name__ == "__main__":
     auth_result = None
     if args.service_account:
         print(f"🔑 Authenticating with service account key: {args.service_account}")
-        auth_result = authenticate_with_service_account(args.service_account)
+        auth_result = auth_with_svc_acct_json(args.service_account)
     elif args.adc:
         print("🔑 Authenticating with Application Default Credentials")
         auth_result = authenticate_with_application_default()
@@ -2258,3 +2393,9 @@ if __name__ == "__main__":
     # send_gmail() TODO: https://medium.com/gitconnected/how-to-send-emails-in-python-with-gcp-cloud-function-b5478e237b27
     # send_slack_msg()
     # send_discord_msg()
+
+
+    # Create GCP VM using Python: https://www.youtube.com/watch?v=UWLBcuktb1U&list=PLLrA_pU9-Gz3zmg__9iK_nnfzYQAGwgH4
+        # by https://www.linkedin.com/in/vishal-bulbule/">Vishal Bulbule</a> https://topmate.io/vishal_bulbule
+        # from google.cloud import compute_v1
+

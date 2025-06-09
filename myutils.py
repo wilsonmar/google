@@ -4,8 +4,8 @@
 
 #### SECTION 01: Dunder (double-underline) variables accessible from CLI outside Python:
 
-__commit_date__ = "2025-06-05"
-__commit_msg__ = "v008 + delete folder :myutils.py"
+__commit_date__ = "2025-06-08"
+__commit_msg__ = "v010 + update_env_file :myutils.py"
 __repository__ = "https://github.com/bomonike/google/blob/main/myutils.py"
 __status__ = "WORKING: ruff check myutils.py => All checks passed!"
 
@@ -58,6 +58,7 @@ from datetime import datetime, timezone
 import time  # for timestamp
 #from time import perf_counter_ns
 std_strt_timestamp = time.monotonic()
+
 #from zoneinfo import ZoneInfo  # For Python 3.9+ https://docs.python.org/3/library/zoneinfo.html 
 
 # To display wall clock date & time of program start:
@@ -114,8 +115,6 @@ from typing import Dict, Any
 # UNUSED: from urllib import error
 # UNUSED: import uuid
 std_stop_timestamp = time.monotonic()
-
-PROGRAM_NAME = os.path.basename(os.path.normpath(sys.argv[0]))
 
 
 #### SECTION 03: Third-party External Python libraries (requiring pip install):
@@ -184,6 +183,101 @@ def diskspace_free() -> float:
 
 pgm_strt_mem_used = memory_used()
 pgm_strt_disk_free = diskspace_free()
+
+
+#### SECTION 05: Time utility functions:
+
+
+def test_datetime():
+    """Test function to verify datetime functionality"""
+    current_time = datetime.now()
+    formatted_time = current_time.strftime("%Y-%m-%d-%H:%M")
+    return formatted_time
+
+
+def get_user_local_time() -> str:
+    """ 
+    Returns a string formatted with datetime stamp in local timezone.
+    Not used in logs which should be in UTC.
+    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
+    """
+    now: datetime = datetime.now()
+    local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+    return f'{now:%I:%M %p (%H:%M:%S) %Y-%m-%d} {local_tz}'
+
+
+def get_user_local_timestamp(format_str: str ="yymmddhhmm") -> str:
+    """ 
+    Returns a string formatted with datetime stamp in local timezone.
+    Not used in logs which should be in UTC.
+    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
+    """
+    current_time = time.localtime()  # localtime([secs])
+    year = str(current_time.tm_year)[-2:]  # Last 2 digits of year
+    month = str(current_time.tm_mon).zfill(2)  # .zfill(2) = zero fill
+    day = str(current_time.tm_mday).zfill(2)  # Day with leading zero
+    hour = str(current_time.tm_hour).zfill(2)  # Day with leading zero
+    minute = str(current_time.tm_min).zfill(2)  # Day with leading zero
+    if format_str == "yymmdd":
+        return f'{year}{month}{day}'
+    if format_str == "yymmddhhmm":
+        return f'{year}{month}{day}{hour}{minute}'
+
+# TODO: Google lasStepTimestamp": "2025-06-07T23:51:54.757-07:00",
+
+
+def filetimestamp(fileName):
+    """
+    USAGE: print(f"File last modified: {myutils.filetimestamp("myutils.py")} ")
+    # TODO: Add time zone info. 📢
+    """
+    created = os.path.getmtime(fileName)
+    modified = os.path.getctime(fileName)
+    if created == modified:
+        return f"{ctimestamp(fileName)}"
+    else:
+        return f"{mtimestamp(fileName)}"
+
+def mtimestamp(fileName):
+    """
+    USAGE: print(f"File last modified: {myutils.mtimestamp("myutils.py")} ")
+    """
+    t = os.path.getmtime(fileName)
+    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
+
+def ctimestamp(fileName):
+    """
+    USAGE: print(f"File created: {myutils.ctimestamp("myutils.py")}")
+    Fixed datetime import issue
+    """
+    t = os.path.getctime(fileName)
+    # Use the imported datetime class correctly
+    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
+
+def list_files(basePath,validExts=None,contains=None):
+    """
+    USAGE: print(myutils.list_files("./"))
+    List files in a directory with optional filters.
+    Args:
+        basePath: Base directory to search for files
+        validExts: Optional tuple of valid file extensions
+        contains: Optional string to filter file names
+    Yields:
+        File paths that match the filters
+    """
+    for rootDir, dirNames, fileNames in os.walk(basePath):
+        for fileName in fileNames:
+            if contains is not None and fileName.find(contains) == -1:
+                continue
+            # reverse find the "." from back wards
+            ext = fileName[fileName.rfind("."):]
+            if validExts is None or ext.endswith(validExts):
+                file = os.path.realpath(os.path.join(rootDir,fileName))
+                yield file
+
+RUNID = get_user_local_timestamp()  # "yymmddhhmm"
+PROGRAM_NAME = os.path.basename(os.path.normpath(sys.argv[0]))
+global_env_path = None
 
 
 #### SECTION 03: Print utility globals and functions (as early in pgm as possible)
@@ -341,9 +435,6 @@ def show_print_samples() -> None:
     return None
 
 
-#### Global CLI parameters:
-
-
 def do_clear_cli() -> None:
     """Clear the CLI screen."""
     print_trace(f"At {sys._getframe().f_code.co_name}()")
@@ -351,6 +442,153 @@ def do_clear_cli() -> None:
     # QUESTION: What's the output variable?
     lambda: os.system('cls' if os.name in ('nt', 'dos') else 'clear')
     return None
+
+
+#### SECTION 05: Python .env (environment) variables:
+
+
+# See https://bomonike.github.io/python-samples/#ParseArguments
+
+
+def open_env_file(global_env_path: str = None) -> str:
+    """Load global variables from .env file based on hard-coded default location.
+    Args: global ENV_FILE 
+    See https://wilsonmar.github.io/python-samples/#envLoad
+    See https://stackoverflow.com/questions/40216311/reading-in-environment-variables-from-an-environment-file
+    """
+    # from pathlib import Path
+    # See https://wilsonmar.github.io/python-samples#run_env
+    if not global_env_path:   # specified or None.
+        global_env_path = str(Path.home()) + "/" + "python-samples.env"  # concatenate path
+
+    # PROTIP: Check if .env file on global_env_path is readable:
+    if not os.path.isfile(global_env_path):
+        global_env_path = None
+        print_error(f"{sys._getframe().f_code.co_name}(): global_env_path: not at \"{global_env_path}\" ")
+        return None
+
+    # import pathlib
+    #path = pathlib.Path(global_env_path)
+    #print_info(f"{sys._getframe().f_code.co_name}(): path: \"{path}\" ")
+
+    # Based on: pip3 install python-dotenv
+    # from dotenv import load_dotenv
+    # See https://www.python-engineer.com/posts/dotenv-python/
+    # See https://pypi.org/project/python-dotenv/
+    load_dotenv(global_env_path)  # using load_dotenv
+    # Wait until variables for print_trace are retrieved:
+    print_info(f"{sys._getframe().f_code.co_name}(): at global_env_path: \"{global_env_path}\" ")
+    return global_env_path
+
+
+def get_str_from_env_file(key_in) -> bool:
+    """Return a value of string data type from OS environment or .env file
+    (using pip python-dotenv)
+    """
+    env_value = os.environ.get(key_in)  # TODO
+    if not env_value:  # yes, defined=True, use it:
+        print_trace(f"{sys._getframe().f_code.co_name}(): \"{key_in}\") not found in .env file.")
+        return None
+
+    print_info(f"{sys._getframe().f_code.co_name}(): {key_in}: \"{env_value}\" ")
+    
+#        # PROTIP: Display only first characters of a potentially secret long string:
+#        if len(env_var) > 5:
+#            print_trace(key_in + "=\"" + str(env_var[:5]) +" (remainder removed)")
+#        else:
+#            print_trace(key_in + "=\"" + str(env_var) + "\" from .env")
+#        return str(env_var)
+
+    return env_value
+
+
+def print_env_vars():
+    """List all environment variables, one line each using pretty print (pprint)
+    """
+    # import os
+    # import pprint
+    environ_vars = os.environ
+    print_heading("User's Environment variable:")
+    print.pprint(dict(environ_vars), width = 1)
+
+
+def update_env_file(file_path, key, new_value):
+    """
+    Update a specific key-value pair in a .env file.
+    Usage:
+        result = update_env_file("key", "new_value")
+    Args:
+        file_path (str): Path to the .env file
+        key (str): The key to update
+        new_value (str): The new value for the key
+    Returns:
+        bool: True if key was found and updated, False if key was not found
+    """
+    #import os
+    # Read the current content:
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+    except FileNotFoundError:
+        print_error(f"{sys._getframe().f_code.co_name}(): File \"{file_path}\" not found.")
+        return False
+    
+    key_found = False
+    updated_lines = []
+    
+    for line in lines:
+        # Strip whitespace for comparison but preserve original formatting:
+        stripped_line = line.strip()
+        
+        # Skip empty lines and comments:
+        if not stripped_line or stripped_line.startswith('#'):
+            updated_lines.append(line)
+            continue
+        
+        # Check if this line contains our key:
+        if '=' in stripped_line:
+            line_key = stripped_line.split('=', 1)[0].strip()
+            if line_key == key:
+                # Update the line with new value:
+                updated_lines.append(f"{key}={new_value}\n")
+                key_found = True
+            else:
+                updated_lines.append(line)
+        else:
+            updated_lines.append(line)
+    
+    # If key wasn't found, add it to the end:
+    if not key_found:
+        updated_lines.append(f"{key}={new_value}\n")
+    
+    # Write the updated content back to the file:
+    try:
+        with open(file_path, 'w') as file:
+            file.writelines(updated_lines)
+        return True
+    except Exception as e:
+        print_error(f"{sys._getframe().f_code.co_name}(): {e}")
+        return False
+
+
+def update_env_with_quotes(file_path, key, new_value):
+    """
+    Update a .env file with proper quoting for values containing spaces or special characters.
+    
+    Args:
+        file_path (str): Path to the .env file
+        key (str): The key to update
+        new_value (str): The new value for the key
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    #import os
+    # Add quotes if value contains spaces or special characters
+    if ' ' in new_value or any(char in new_value for char in ['#', '"', "'"]):
+        new_value = f'"{new_value}"'
+    
+    return update_env_file(file_path, key, new_value)
 
 
 #### SECTION 07 - Read custom command line (CLI) arguments controlling this program run:
@@ -375,6 +613,9 @@ parser.add_argument("-do", "--delout", action="store_true", help="Delete output 
 # Load arguments from CLI:
 args = parser.parse_args()
 
+
+#### SECTION 08 - Override defaults and .env file with run-time parms:
+
 SHOW_QUIET = args.quiet
 SHOW_VERBOSE = args.verbose
 SHOW_DEBUG = args.debug
@@ -394,90 +635,6 @@ EMAIL_FROM = "loadtesters@gmail.com"  # TODO: Change in CLI parm
 EMAIL_TO = "???"
 
 DELETE_OUTPUT_FILE = args.delout            # -de  --delout Delete output file
-
-env_file = "python-samples.env"
-ENV_FILE = "python-samples.env"
-
-
-#### SECTION 08 - Override defaults and .env file with run-time parms:
-
-
-def get_user_local_timestamp(format_str: str ="yymmddhhmm") -> str:
-    """ 
-    Returns a string formatted with datetime stamp in local timezone.
-    Not used in logs which should be in UTC.
-    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
-    """
-    current_time = time.localtime()  # localtime([secs])
-    year = str(current_time.tm_year)[-2:]  # Last 2 digits of year
-    month = str(current_time.tm_mon).zfill(2)  # .zfill(2) = zero fill
-    day = str(current_time.tm_mday).zfill(2)  # Day with leading zero
-    hour = str(current_time.tm_hour).zfill(2)  # Day with leading zero
-    minute = str(current_time.tm_min).zfill(2)  # Day with leading zero
-    if format_str == "yymmdd":
-        return f'{year}{month}{day}'
-    if format_str == "yymmddhhmm":
-        return f'{year}{month}{day}{hour}{minute}'
-
-RUNID = get_user_local_timestamp()  # "yymmddhhmm"
-
-
-
-
-
-#### SECTION 09: File timestamps and lists:
-
-
-# print_verbose(f"{sys._getframe().f_code.co_name}(): ")
-
-def filetimestamp(fileName):
-    """
-    USAGE: print(f"File last modified: {myutils.filetimestamp("myutils.py")} ")
-    # TODO: Add time zone info. 📢
-    """
-    created = os.path.getmtime(fileName)
-    modified = os.path.getctime(fileName)
-    if created == modified:
-        return f"{ctimestamp(fileName)}"
-    else:
-        return f"{mtimestamp(fileName)}"
-
-def mtimestamp(fileName):
-    """
-    USAGE: print(f"File last modified: {myutils.mtimestamp("myutils.py")} ")
-    """
-    t = os.path.getmtime(fileName)
-    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
-
-def ctimestamp(fileName):
-    """
-    USAGE: print(f"File created: {myutils.ctimestamp("myutils.py")}")
-    Fixed datetime import issue
-    """
-    t = os.path.getctime(fileName)
-    # Use the imported datetime class correctly
-    return datetime.fromtimestamp(t).strftime("%Y-%m-%d-%H:%M")
-
-def list_files(basePath,validExts=None,contains=None):
-    """
-    USAGE: print(myutils.list_files("./"))
-    List files in a directory with optional filters.
-    Args:
-        basePath: Base directory to search for files
-        validExts: Optional tuple of valid file extensions
-        contains: Optional string to filter file names
-    Yields:
-        File paths that match the filters
-    """
-    for rootDir, dirNames, fileNames in os.walk(basePath):
-        for fileName in fileNames:
-            if contains is not None and fileName.find(contains) == -1:
-                continue
-            # reverse find the "." from back wards
-            ext = fileName[fileName.rfind("."):]
-            if validExts is None or ext.endswith(validExts):
-                file = os.path.realpath(os.path.join(rootDir,fileName))
-                yield file
 
 
 #### SECTION 04: Python program name:
@@ -575,116 +732,6 @@ def set_cli_parms(count):
     # Test by running: ./python-examples.py --help
 
 
-#### SECTION 05: Python .env (environment) variables:
-
-
-# See https://bomonike.github.io/python-samples/#ParseArguments
-
-
-def load_env_file(env_path: str) -> None:
-    """Read .env file containing variables and values.
-    See https://wilsonmar.github.io/python-samples/#envLoad
-    See https://stackoverflow.com/questions/40216311/reading-in-environment-variables-from-an-environment-file
-    """
-
-        # TODO: drivepath(ENV_FILE_PATH)
-        # TODO: open_env_file(ENV_FILE_PATH)
-        # TODO: read_env_file(ENV_FILE_PATH)  # calls print_samples()
-        #if DRIVE_PATH:
-        #    list_files_on_removable_drive(DRIVE_PATH)
-        # TODO: eject_drive(removable_drive_path)
-
-    openai_api_key = get_str_from_env_file('OPENAI_API_KEY')
-    if openai_api_key is None:
-        print_error("openai_api_key="+openai_api_key+" not in "+env_path)
-    else:
-        print_error("openai_api_key="+openai_api_key+" in "+env_path)
-
-    return None
-
-
-def open_env_file() -> bool:
-    """Update global variables obtained from .env file based on key provided.
-    """
-    global global_env_path
-    global user_home_dir_path
-    global ENV_FILE
-    if not global_env_path:
-        # from pathlib import Path
-        # See https://wilsonmar.github.io/python-samples#run_env
-        if not user_home_dir_path:  # example: /users/john_doe
-            user_home_dir_path = str(Path.home())
-            if not ENV_FILE:
-                ENV_FILE="python-samples.env"  # the hard-coded default
-            global_env_path = user_home_dir_path + "/" + ENV_FILE  # concatenate path
-
-    # PROTIP: Check if .env file on global_env_path is readable:
-    if not os.path.isfile(global_env_path):
-        print_error(global_env_path+" (global_env_path) not found!")
-        return None
-    else:
-        # import pathlib
-        path = pathlib.Path(global_env_path)
-        # Based on: pip3 install python-dotenv
-        # from dotenv import load_dotenv
-        # See https://www.python-engineer.com/posts/dotenv-python/
-        # See https://pypi.org/project/python-dotenv/
-        load_dotenv(global_env_path)  # using load_dotenv
-        # Wait until variables for print_trace are retrieved:
-        print_info(f"open_env_file() to \"{global_env_path}\" or \"{path}\"")
-
-    return True
-
-def get_str_from_env_file(key_in) -> str:
-    """Return a value of string data type from OS environment or .env file
-    (using pip python-dotenv)
-    """
-    # FIXME: # TODO: Default ENV_FILE name:
-
-    env_var = os.environ.get(key_in)
-    if not env_var:  # yes, defined=True, use it:
-        print_trace(f"get_str_from_env_file(\"{key_in}\") not found in .env file.")
-        return None
-    else:
-        # PROTIP: Display only first characters of a potentially secret long string:
-        if len(env_var) > 5:
-            print_trace(key_in + "=\"" + str(env_var[:5]) +" (remainder removed)")
-        else:
-            print_trace(key_in + "=\"" + str(env_var) + "\" from .env")
-        return str(env_var)
-
-
-def print_env_vars():
-    """List all environment variables, one line each using pretty print (pprint)
-    """
-    # import os
-    # import pprint
-    environ_vars = os.environ
-    print_heading("User's Environment variable:")
-    print.pprint(dict(environ_vars), width = 1)
-
-
-#### SECTION 05: Time utility functions:
-
-
-def test_datetime():
-    """Test function to verify datetime functionality"""
-    current_time = datetime.now()
-    formatted_time = current_time.strftime("%Y-%m-%d-%H:%M")
-    return formatted_time
-
-
-def get_user_local_time() -> str:
-    """ 
-    Returns a string formatted with datetime stamp in local timezone.
-    Not used in logs which should be in UTC.
-    Example: "07:17 AM (07:17:54) 2025-04-21 MDT"
-    """
-    now: datetime = datetime.now()
-    local_tz = datetime.now(timezone.utc).astimezone().tzinfo
-    return f'{now:%I:%M %p (%H:%M:%S) %Y-%m-%d} {local_tz}'
-
-
 #### SECTION 06: Logging utility functions:
 
 
@@ -754,7 +801,7 @@ def mem_usage(tag):
     denom = 1024
     if sys.platform == "darwin":
         denom = denom**2
-    print(f'INFO: memory used is at {tag} : {round(mem/denom,2)} MB')
+    print(f'memory used is at {tag} : {round(mem/denom,2)} MB')
 
 def beautify_json(file,outfile=None):
     """
@@ -1167,8 +1214,7 @@ def macos_sys_info():
     my_platform_node = platform.node()
     print_trace("my_platform_node = "+my_platform_node + " (machine name)")
 
-    # print_trace("env_file = "+env_file)
-    print_trace("user_home_dir_path = "+user_home_dir_path)
+    print_trace("user_home_dir_path = "+str(Path.home())  )
     # the . in .secrets tells Linux that it should be a hidden file.
 
     # import platform # https://docs.python.org/3/library/platform.html
@@ -1408,7 +1454,7 @@ def print_dunder_vars(filename) -> str:
     except Exception as e:
         print(f"{sys._getframe().f_code.co_name}() Error: {e}! ")
         sys.exit(1)
-# zzz
+
 
 #### Encryption on Drives
 
@@ -1534,10 +1580,8 @@ def read_file_from_removable_drive(drive_path: str, file_name: str, content: str
     write_file_to_removable_drive(drive_path, env_file, content)
 
     # Find the user's $HOME path:
-    global user_home_dir_path
-    user_home_dir_path = str(Path.home())
        # example: /users/john_doe
-    global_env_path = user_home_dir_path + "/" + env_file  # concatenate path
+    global_env_path = str(Path.home()) + "/" + env_file  # concatenate path
 
     # PROTIP: Check if .env file on global_env_path is readable:
     if not os.path.isfile(global_env_path):
@@ -1680,6 +1724,30 @@ def gen_random_alphanumeric(length=12):
     # WARNING: Avoid printing out secret values.
 
 
+def is_within_git_folder(output_dir: str) -> bool:
+    """
+    Returns True (for exit) if output_dir is within/under a .git folder.
+    """
+    # (.) in first character resolves to current directory.
+    # Substitute tilde (~) in first character of output_dir with User's home directory:
+    if output_dir[0] == "~":
+        output_dir = str(Path.home()) + output_dir[1:]
+        print_verbose(f"{sys._getframe().f_code.co_name}(): output_dir: \"{output_dir}\"")
+
+    # from pathlib import Path:
+    output_dir = Path(output_dir).resolve()
+    if output_dir.name == '.git' and output_dir.is_dir():
+        print_fail(f"{sys._getframe().f_code.co_name}(): output_dir: \"{output_dir}\" contains a .git directory!")
+        return True
+    # Check each parent directory for .git folder:
+    for parent in [output_dir] + list(output_dir.parents):
+        git_path = parent / '.git'
+        if git_path.exists() and git_path.is_dir():
+            print_fail(f"{sys._getframe().f_code.co_name}(): {output_dir} is under .git folder: \"{git_path}\" ")
+            return True
+    return False
+
+
 def generate_rsa_keypair(key_size=2048, save_to_files=True, output_dir="~/.keys"):
     """
     Generate RSA private/public key pair
@@ -1692,17 +1760,8 @@ def generate_rsa_keypair(key_size=2048, save_to_files=True, output_dir="~/.keys"
     Returns:
         tuple: (private_key_pem, public_key_pem) as bytes
     """
-    # from pathlib import Path
-    output_dir = Path(output_dir).resolve()
-    if output_dir.name == '.git' and output_dir.is_dir():
-        print_fail(f"{sys._getframe().f_code.co_name}(): output_dir: \"{output_dir}\" contains a .git directory!")
+    if is_within_git_folder(output_dir):
         exit(9)
-    # Check each parent directory for .git folder
-    for parent in [output_dir] + list(output_dir.parents):
-        git_path = parent / '.git'
-        if git_path.exists() and git_path.is_dir():
-            print_fail(f"{sys._getframe().f_code.co_name}(): .git in parent directory: \"{git_path}\" ")
-            exit(9)
 
     # Generate private key:
     private_key = rsa.generate_private_key(
@@ -1749,6 +1808,7 @@ def generate_rsa_keypair(key_size=2048, save_to_files=True, output_dir="~/.keys"
     
     return private_pem, public_pem
 
+
 def generate_encrypted_keypair(password, key_size=2048, output_dir="~/.keys"):
     """
     Generate RSA key pair with encrypted private key
@@ -1758,7 +1818,11 @@ def generate_encrypted_keypair(password, key_size=2048, output_dir="~/.keys"):
         key_size (int): Size of the RSA key
         output_dir (str): Directory to save key files
     """
-    
+    # (.) in first character resolves to current directory.
+    # Substitute tilde (~) in first character of output_dir with User's home directory:
+    if is_within_git_folder(output_dir):
+        exit(9)
+        
     # Generate private key
     private_key = rsa.generate_private_key(
         public_exponent=65537,
@@ -1978,7 +2042,7 @@ def save_key_in_keychain(svc: str, acct: str, key: str) -> bool:
         return True
 
 
-### SECTION 17 - Send Gmail
+### SECTION 18 - Send email via Gmail using SMTP
 
 
 def send_smtp() -> bool:
@@ -1996,7 +2060,7 @@ def send_smtp() -> bool:
     password = get_api_key("gmail",EMAIL_FROM)  # loadtesters
     if not password:
         print_fail(f"{sys._getframe().f_code.co_name}(): password needed.")
-        exit()
+        exit(9)
 
     recipients = EMAIL_TO  # Recipients as a list: "[ 1@example.com, 2@example.com ]"
     if recipients is None:   # Not a list
@@ -2064,6 +2128,10 @@ def is_only_numbers(variable):
 def main():   # SAMPLE USAGE:
 
     do_clear_cli()
+
+    global_env_path = open_env_file()
+    my_printer = get_str_from_env_file("MY_PRINTER")
+
     print_verbose(f"Started: {get_user_local_time()}, in logs: {get_log_datetime()} ")
     pgm_strt_mem_used = get_process_memory()
     print_verbose(f"Started: {pgm_strt_mem_used:.2f} MiB RAM being used.")
@@ -2097,26 +2165,27 @@ def main():   # SAMPLE USAGE:
     # Secrets:
     print_heading("RSA Key Pair Generator:")
 
-    print(f"gen_random_alphanumeric(): \"{gen_random_alphanumeric(length=12)}\" ")
+    print(f"gen_random_alphanumeric(): \"{gen_random_alphanumeric(length=12)}\" (SAMPLE ONLY) ")
     # On Macos: Save keys in standard PEM format.
 
-    #file_path = "./keys/private_key.pem"
+    #file_path = "~/keys/private_key.pem"
     #print_heading(f"1. Generating unencrypted RSA key pair (2048-bit) to \"{file_path}\"...")
+    # TODO: Add folder_path = "~/keys"
     #private_pem, public_pem = generate_rsa_keypair()
     #print(f"Private key size: {len(private_pem)} bytes")
     #print(f"Public key size:  {len(public_pem)} bytes")
     #delete_all_files_in_folder(folder_path)
     
-    #folder_path = "./encrypted_keys"
+    #folder_path = "~/encrypted_keys"
     #print_heading(f"2. Generating encrypted RSA key pair to \"{folder_path}\"...")
     #password = "your_secure_password_here"  # Change this!
-    #generate_encrypted_keypair(password, output_dir="./encrypted_keys")
+    #generate_encrypted_keypair(password, output_dir=folder_path)
     #delete_all_files_in_folder(folder_path)
     
-    folder_path = "./large_keys"
-    print_heading(f"3. Generating 4096-bit RSA key pair to \"{folder_path}\"...")
-    generate_rsa_keypair(key_size=4096, output_dir="./large_keys")
-    file_path="./large_keys/private_key.pem"
+    folder_path = "~/large_keys"
+    print_heading(f"3. Generating large RSA key pair to \"{folder_path}\"...")
+    generate_rsa_keypair(key_size=4096, output_dir=folder_path)
+    file_path=f"{folder_path}/private_key.pem"
     private_rsa_key_clear_text = read_file_to_string(file_path)
     print_verbose(f"private_rsa_key_clear_text: {len(private_rsa_key_clear_text)} bytes")
        # DO NOT PRINT SECRETS: private_rsa_key_clear_text
